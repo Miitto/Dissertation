@@ -7,6 +7,8 @@ use glium::{
     },
 };
 
+pub mod basic_vertex;
+
 pub fn make_event_loop() -> EventLoop<()> {
     let event_loop =
         glium::winit::event_loop::EventLoop::new().expect("Failed to create event loop");

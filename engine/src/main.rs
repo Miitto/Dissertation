@@ -6,7 +6,27 @@ use glium::{
         window::Window,
     },
 };
-use renderer::{make_event_loop, make_window};
+use renderer::{basic_vertex::BasicVertex, make_event_loop, make_window};
+
+const basic_vertex_src: &str = r#"
+#version 330
+
+in vec3 position;
+
+void main() {
+    gl_Position = vec4(position, 1.0);
+}
+"#;
+
+const basic_frag_src: &str = r#"
+#version 330
+
+out vec4 color;
+
+void main() {
+    color = vec4(1.0, 0.0, 0.0, 1.0);
+}
+"#;
 
 fn main() {
     let event_loop = make_event_loop();
@@ -46,6 +66,35 @@ impl ApplicationHandler for App {
                     let mut target = display.draw();
 
                     target.clear_color(0.0, 0.0, 1.0, 1.0);
+
+                    let v1 = BasicVertex::new(-0.5, -0.5, 0.);
+                    let v2 = BasicVertex::new(0., 0.5, 0.);
+                    let v3 = BasicVertex::new(0.5, -0.5, 0.);
+
+                    let tri = vec![v1, v2, v3];
+
+                    let v_buf = glium::VertexBuffer::new(display, &tri)
+                        .expect("Failed to make tri v buffer");
+                    let indices =
+                        glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+
+                    let program = glium::Program::from_source(
+                        display,
+                        basic_vertex_src,
+                        basic_frag_src,
+                        None,
+                    )
+                    .expect("Failed to make shader");
+
+                    target
+                        .draw(
+                            &v_buf,
+                            indices,
+                            &program,
+                            &glium::uniforms::EmptyUniforms,
+                            &Default::default(),
+                        )
+                        .expect("Failed to draw tri");
 
                     target.finish().expect("Failed to finish target");
                 }
