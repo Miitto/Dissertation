@@ -6,27 +6,24 @@ use glium::{
         window::Window,
     },
 };
-use renderer::{basic_vertex::BasicVertex, make_event_loop, make_window};
+use renderer::{make_event_loop, make_window};
+use shader_macros::shader;
 
-const basic_vertex_src: &str = r#"
-#version 330
-
+shader!(VERT, Basic, 330, {
 in vec3 position;
 
 void main() {
     gl_Position = vec4(position, 1.0);
 }
-"#;
+});
 
-const basic_frag_src: &str = r#"
-#version 330
-
+shader!(FRAG, Basic, 330, {
 out vec4 color;
 
 void main() {
     color = vec4(1.0, 0.0, 0.0, 1.0);
 }
-"#;
+});
 
 fn main() {
     let event_loop = make_event_loop();
@@ -67,9 +64,15 @@ impl ApplicationHandler for App {
 
                     target.clear_color(0.0, 0.0, 1.0, 1.0);
 
-                    let v1 = BasicVertex::new(-0.5, -0.5, 0.);
-                    let v2 = BasicVertex::new(0., 0.5, 0.);
-                    let v3 = BasicVertex::new(0.5, -0.5, 0.);
+                    let v1 = BasicVertex {
+                        position: [-0.5, -0.5, 0.],
+                    };
+                    let v2 = BasicVertex {
+                        position: [0., 0.5, 0.],
+                    };
+                    let v3 = BasicVertex {
+                        position: [0.5, -0.5, 0.],
+                    };
 
                     let tri = vec![v1, v2, v3];
 
@@ -80,8 +83,8 @@ impl ApplicationHandler for App {
 
                     let program = glium::Program::from_source(
                         display,
-                        basic_vertex_src,
-                        basic_frag_src,
+                        BasicVertex::source(),
+                        BasicFragment::source(),
                         None,
                     )
                     .expect("Failed to make shader");

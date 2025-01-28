@@ -325,6 +325,8 @@ version = "0.1.0"
 dependencies = [
  "glium",
  "renderer",
+ "shader_macros",
+ "shaders",
 ]
 
 [[package]]
@@ -1117,6 +1119,28 @@ dependencies = [
  "quote",
  "syn",
 ]
+
+[[package]]
+name = "shader_macros"
+version = "0.1.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "shaders",
+ "shaders_common",
+ "syn",
+]
+
+[[package]]
+name = "shaders"
+version = "0.1.0"
+dependencies = [
+ "glium",
+]
+
+[[package]]
+name = "shaders_common"
+version = "0.1.0"
 
 [[package]]
 name = "shlex"
