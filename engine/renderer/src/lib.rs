@@ -1,15 +1,23 @@
 use glium::{
     Display,
     glutin::surface::WindowSurface,
-    winit::{event_loop::EventLoop, window::Window},
+    winit::{
+        event_loop::{ActiveEventLoop, EventLoop},
+        window::Window,
+    },
 };
 
-pub fn make_window() -> (EventLoop<()>, Window, Display<WindowSurface>) {
-    let event_loop = glium::winit::event_loop::EventLoop::builder()
-        .build()
-        .expect("Failed to Create event loop");
+pub fn make_event_loop() -> EventLoop<()> {
+    let event_loop =
+        glium::winit::event_loop::EventLoop::new().expect("Failed to create event loop");
 
-    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new().build(&event_loop);
+    event_loop.set_control_flow(glium::winit::event_loop::ControlFlow::Poll);
 
-    (event_loop, window, display)
+    event_loop
+}
+
+pub fn make_window(event_loop: &ActiveEventLoop) -> (Window, Display<WindowSurface>) {
+    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new().build(event_loop);
+
+    (window, display)
 }
