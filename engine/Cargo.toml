@@ -1,0 +1,16 @@
+[package]
+name = "engine"
+version = "0.1.0"
+edition = "2024"
+
+[workspace]
+members = ["renderer"]
+
+[workspace.dependencies]
+glium = "0.36.0"
+renderer = { path = "./renderer/" }
+glm = "0.2.3"
+
+[dependencies]
+glium.workspace = true
+renderer.workspace = true
