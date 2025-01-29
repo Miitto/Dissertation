@@ -1,3 +1,5 @@
+pub use shader_macros::shader;
+
 pub trait Shader {
-    fn get_src(&self) -> &str;
+    fn source() -> &'static str;
 }

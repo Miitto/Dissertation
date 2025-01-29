@@ -11,10 +11,8 @@ glium = "0.36.0"
 renderer = { path = "./renderer/" }
 glm = "0.2.3"
 shaders = { path = "./shaders" }
-shader_macros = { path = "./shader_macros" }
 
 [dependencies]
 glium.workspace = true
 renderer.workspace = true
-shader_macros.workspace = true
 shaders.workspace = true

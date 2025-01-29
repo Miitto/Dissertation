@@ -7,7 +7,7 @@ use glium::{
     },
 };
 use renderer::{make_event_loop, make_window};
-use shader_macros::shader;
+use shaders::shader;
 
 shader!(VERT, Basic, 330, {
 in vec3 position;

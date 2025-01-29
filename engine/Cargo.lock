@@ -325,7 +325,6 @@ version = "0.1.0"
 dependencies = [
  "glium",
  "renderer",
- "shader_macros",
  "shaders",
 ]
 
@@ -1126,7 +1125,6 @@ version = "0.1.0"
 dependencies = [
  "proc-macro2",
  "quote",
- "shaders",
  "shaders_common",
  "syn",
 ]
@@ -1136,6 +1134,7 @@ name = "shaders"
 version = "0.1.0"
 dependencies = [
  "glium",
+ "shader_macros",
 ]
 
 [[package]]

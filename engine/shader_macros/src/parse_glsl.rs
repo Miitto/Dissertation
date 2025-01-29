@@ -1,9 +1,13 @@
-use proc_macro::{Group, Ident, Punct, TokenStream, TokenTree};
+use proc_macro::{Group, TokenTree};
 
-use crate::{ShaderInput, ShaderMeta, ShaderVar, ShaderVarType};
+use crate::{
+    ShaderInput, ShaderMeta,
+    shader_var::{ShaderVar, ShaderVarType},
+};
 
 enum Segment {
     Line(Vec<TokenTree>),
+    #[allow(dead_code)]
     Group(Vec<TokenTree>, Vec<Segment>),
 }
 
