@@ -7,17 +7,17 @@ use glium::{
     },
 };
 use renderer::{make_event_loop, make_window};
-use shaders::shader;
+use shaders::Program;
 
-shader!(VERT, Basic, 330, {
+shaders::program!(Basic, 330, {
 in vec3 position;
 
 void main() {
     gl_Position = vec4(position, 1.0);
 }
-});
+},
+{
 
-shader!(FRAG, Basic, 330, {
 out vec4 color;
 
 void main() {
@@ -81,13 +81,7 @@ impl ApplicationHandler for App {
                     let indices =
                         glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
 
-                    let program = glium::Program::from_source(
-                        display,
-                        BasicVertex::source(),
-                        BasicFragment::source(),
-                        None,
-                    )
-                    .expect("Failed to make shader");
+                    let program = Basic::to_glium(display).expect("Failed to make shader");
 
                     target
                         .draw(

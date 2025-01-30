@@ -1,16 +1,31 @@
+use proc_macro::Span;
 use quote::{format_ident, quote};
 
+#[derive(Clone, Debug)]
 pub struct ShaderVar {
     pub name: String,
     pub r#type: ShaderVarType,
+    pub name_span: Span,
+    pub type_span: Option<Span>,
 }
 
 impl ShaderVar {
-    pub fn new(r#type: ShaderVarType, name: String) -> Self {
-        Self { name, r#type }
+    pub fn new(
+        r#type: ShaderVarType,
+        type_span: Option<Span>,
+        name: String,
+        name_span: Span,
+    ) -> Self {
+        Self {
+            name,
+            r#type,
+            type_span,
+            name_span,
+        }
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
 pub enum ShaderVarType {
     Int,
     Float,
@@ -21,9 +36,43 @@ pub enum ShaderVarType {
     Vec4,
     Other(String),
 }
+impl ShaderVarType {
+    pub(crate) fn is_type(as_str: &str) -> bool {
+        let converted: ShaderVarType = as_str.into();
+        !matches!(converted, ShaderVarType::Other(_))
+    }
+}
 
 impl From<&str> for ShaderVarType {
     fn from(value: &str) -> Self {
+        let float = value.strip_suffix('f');
+        if let Some(float) = float {
+            if float.parse::<f32>().is_ok() {
+                return Self::Float;
+            }
+        }
+
+        let long = value.strip_suffix('l');
+        if let Some(long) = long {
+            if long.parse::<i64>().is_ok() {
+                return Self::Long;
+            }
+        }
+        let upper_long = value.strip_suffix('L');
+        if let Some(upper_long) = upper_long {
+            if upper_long.parse::<i64>().is_ok() {
+                return Self::Long;
+            }
+        }
+
+        if value.parse::<i32>().is_ok() {
+            return Self::Int;
+        }
+
+        if value.parse::<f32>().is_ok() {
+            return Self::Long;
+        }
+
         match value {
             "int" => Self::Int,
             "float" => Self::Float,
