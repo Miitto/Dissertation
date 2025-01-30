@@ -27,13 +27,18 @@ impl ShaderVar {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderVarType {
+    Bool,
     Int,
+    Uint,
     Float,
-    Long,
     Double,
     Vec2,
     Vec3,
     Vec4,
+    Mat2,
+    Mat3,
+    Mat4,
+    DMat4,
     Other(String),
 }
 impl ShaderVarType {
@@ -52,35 +57,27 @@ impl From<&str> for ShaderVarType {
             }
         }
 
-        let long = value.strip_suffix('l');
-        if let Some(long) = long {
-            if long.parse::<i64>().is_ok() {
-                return Self::Long;
-            }
-        }
-        let upper_long = value.strip_suffix('L');
-        if let Some(upper_long) = upper_long {
-            if upper_long.parse::<i64>().is_ok() {
-                return Self::Long;
-            }
-        }
-
         if value.parse::<i32>().is_ok() {
             return Self::Int;
         }
 
         if value.parse::<f32>().is_ok() {
-            return Self::Long;
+            return Self::Float;
         }
 
         match value {
+            "bool" => Self::Bool,
             "int" => Self::Int,
+            "uint" => Self::Uint,
             "float" => Self::Float,
-            "long" => Self::Long,
             "double" => Self::Double,
             "vec2" => Self::Vec2,
             "vec3" => Self::Vec3,
             "vec4" => Self::Vec4,
+            "mat2" => Self::Mat2,
+            "mat3" => Self::Mat3,
+            "mat4" => Self::Mat4,
+            "dmat4" => Self::DMat4,
             _ => Self::Other(value.to_string()),
         }
     }
@@ -96,13 +93,18 @@ impl quote::ToTokens for ShaderVarType {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         use ShaderVarType::*;
         let t = match self {
+            Bool => quote! { bool },
             Int => quote! { i32 },
-            Long => quote! { i64 },
+            Uint => quote! { u32 },
             Float => quote! { f32 },
             Double => quote! { f64 },
             Vec2 => quote! { [f32; 2] },
             Vec3 => quote! { [f32; 3] },
             Vec4 => quote! { [f32; 4] },
+            Mat2 => quote! { [[f32; 2]; 2] },
+            Mat3 => quote! { [[f32; 3]; 3] },
+            Mat4 => quote! { [[f32; 4]; 4] },
+            DMat4 => quote! { [[f64; 4]; 4] },
             Other(s) => {
                 let ident = format_ident!("{}", s);
                 quote! {#ident}

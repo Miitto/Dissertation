@@ -9,10 +9,11 @@ members = ["renderer", "shader_macros", "shaders", "shaders_common"]
 [workspace.dependencies]
 glium = "0.36.0"
 renderer = { path = "./renderer/" }
-glm = "0.2.3"
+glam = "0.29.2"
 shaders = { path = "./shaders" }
 
 [dependencies]
 glium.workspace = true
 renderer.workspace = true
 shaders.workspace = true
+glam.workspace = true

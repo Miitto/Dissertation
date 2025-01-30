@@ -147,6 +147,11 @@ fn parse_line(
     ) {
         // Check for assignment
         if let Some(equals) = equals {
+            if let TokenTree::Punct(p) = equals {
+                if p.as_char() != '=' {
+                    return;
+                }
+            }
             if let Some(third) = assigner {
                 let as_string = third.to_string();
 
@@ -166,6 +171,10 @@ fn parse_line(
 
                 // Check for creating another type, such as `vec2(1.0, 1.0)`
                 let as_type: ShaderVarType = as_string.as_str().into();
+
+                if let ShaderVarType::Other(_) = as_type {
+                    return;
+                }
 
                 let this_var = ShaderVar::new(
                     as_type.clone(),

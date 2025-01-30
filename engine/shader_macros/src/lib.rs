@@ -218,8 +218,8 @@ fn make_vertex_shader(
 
     quote! {
         #[derive(Debug, Copy, Clone)]
-        struct #ident {
-            #(pub #shader_in),*
+        pub struct #ident {
+            #(pub #shader_in)*
         }
 
         #vertex_impl
@@ -228,10 +228,11 @@ fn make_vertex_shader(
 
 fn make_uniforms(ident: &proc_macro2::Ident, uniforms: &[ShaderVar]) -> proc_macro2::TokenStream {
     quote! {
-        struct #ident {
-            #(pub #uniforms),*
-        }
+    pub struct #ident {
+        #(pub #uniforms)*
     }
+
+        }
 }
 
 fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macro2::TokenStream {
@@ -249,7 +250,7 @@ fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macr
     };
 
     quote! {
-        struct #ident;
+        pub struct #ident;
 
         impl ::shaders::Program for #ident {
             fn vertex() -> &'static str {
@@ -291,6 +292,8 @@ pub fn program(input: TokenStream) -> TokenStream {
 
     let vertex = make_vertex_shader(&program.meta.vertex_ident(), &program.vertex_shader);
     let uniforms = make_uniforms(&program.meta.uniforms_ident(), &uniforms);
+
+    dbg!(&uniforms.to_string());
 
     program.check();
     dbg!(&program.vertex_shader.shader_out);
