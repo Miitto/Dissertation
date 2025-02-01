@@ -293,10 +293,7 @@ pub fn program(input: TokenStream) -> TokenStream {
     let vertex = make_vertex_shader(&program.meta.vertex_ident(), &program.vertex_shader);
     let uniforms = make_uniforms(&program.meta.uniforms_ident(), &uniforms);
 
-    dbg!(&uniforms.to_string());
-
     program.check();
-    dbg!(&program.vertex_shader.shader_out);
 
     let program = make_program(&program.meta.ident(), &program);
 
