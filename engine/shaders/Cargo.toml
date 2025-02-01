@@ -6,3 +6,4 @@ edition = "2024"
 [dependencies]
 glium.workspace = true
 shader_macros = { path = "../shader_macros" }
+shaders_common = { path = "../shaders_common" }

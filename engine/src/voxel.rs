@@ -114,7 +114,7 @@ impl Renderable for Voxel {
         buffer_bench.end();
 
         let program_bench = bchmk.start("Program");
-        let program = BasicVoxel::to_glium(display).expect("Failed to make shader");
+        let program = BasicVoxel::get(display).expect("Failed to make shader");
         program_bench.end();
 
         let draw_parameters = DrawParameters {

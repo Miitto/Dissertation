@@ -1149,11 +1149,15 @@ version = "0.1.0"
 dependencies = [
  "glium",
  "shader_macros",
+ "shaders_common",
 ]
 
 [[package]]
 name = "shaders_common"
 version = "0.1.0"
+dependencies = [
+ "glium",
+]
 
 [[package]]
 name = "shlex"

@@ -25,6 +25,9 @@ fn main() {
         app.state.benchmark
     };
 
+    println!();
+    println!("Compiled {} shaders", shaders::shaders_compiled());
+
     benchmark.print();
 }
 

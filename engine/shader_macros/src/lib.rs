@@ -252,7 +252,7 @@ fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macr
     quote! {
         pub struct #ident;
 
-        impl ::shaders::Program for #ident {
+        impl ::shaders::ProgramInternal for #ident {
             fn vertex() -> &'static str {
                 #vert_source
             }
