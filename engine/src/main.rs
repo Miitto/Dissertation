@@ -1,83 +1,38 @@
-#![feature(duration_millis_float)]
-
-mod voxel;
-use std::collections::HashMap;
-
 use glium::{
-    Display, Surface,
+    Display,
     glutin::surface::WindowSurface,
-    uniform,
     winit::{
         application::ApplicationHandler,
-        event::{ElementState, KeyEvent, WindowEvent},
+        event::{DeviceEvent, MouseScrollDelta, WindowEvent},
         event_loop::ActiveEventLoop,
-        keyboard::{KeyCode, PhysicalKey},
+        keyboard::PhysicalKey,
         window::Window,
     },
 };
-use renderer::{
-    Renderable,
-    camera::{Camera, PerspectiveCamera},
-    make_event_loop, make_window,
-};
-use shaders::Program;
+use renderer::{Renderable, State, make_event_loop, make_window};
+
+mod voxel;
+
 use voxel::Voxel;
 
-shaders::program!(Basic, 330, {
-in vec3 position;
-in vec4 color;
-
-uniform mat4 modelMatrix;
-uniform mat4 viewMatrix;
-uniform mat4 projectionMatrix;
-
-out vec4 vertexColor;
-
-void main() {
-    mat4 pv = projectionMatrix * viewMatrix;
-
-    mat4 mvp = pv * modelMatrix;
-
-    vertexColor = color;
-
-    gl_Position = mvp * vec4(position, 1.0);
-}
-},
-{
-in vec4 vertexColor;
-
-out vec4 color;
-
-void main() {
-    color = vertexColor;
-}
-});
-
 fn main() {
-    let event_loop = make_event_loop();
+    let benchmark = {
+        let mut app = App::default();
+        app.state.benchmark.enable();
 
-    let mut app = App::default();
-    let _ = event_loop.run_app(&mut app);
+        let event_loop = make_event_loop();
+        let _ = event_loop.run_app(&mut app);
+        app.state.benchmark
+    };
+
+    benchmark.print();
 }
 
+#[derive(Default)]
 struct App {
     window: Option<Window>,
     display: Option<Display<WindowSurface>>,
-    camera: Box<dyn Camera>,
-    last_frame_time: std::time::Instant,
-    keys: HashMap<PhysicalKey, KeyEvent>,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            window: None,
-            display: None,
-            camera: Box::new(PerspectiveCamera::default()),
-            last_frame_time: std::time::Instant::now(),
-            keys: HashMap::new(),
-        }
-    }
+    state: State,
 }
 
 impl ApplicationHandler for App {
@@ -85,12 +40,36 @@ impl ApplicationHandler for App {
         let (window, display) = make_window(event_loop);
 
         let size = window.inner_size();
-        self.camera
+        self.state
+            .camera
             .on_window_resize(size.width as f32, size.height as f32);
 
         self.window = Some(window);
         self.display = Some(display);
     }
+
+    fn device_event(
+        &mut self,
+        _event_loop: &ActiveEventLoop,
+        _id: glium::winit::event::DeviceId,
+        event: glium::winit::event::DeviceEvent,
+    ) {
+        match event {
+            DeviceEvent::MouseMotion { delta } => {
+                self.state.input.mouse_move(delta.0, delta.1);
+            }
+            DeviceEvent::MouseWheel { delta } => match delta {
+                MouseScrollDelta::LineDelta(_, y) => {
+                    self.state.input.wheel_scroll(y);
+                }
+                MouseScrollDelta::PixelDelta(y) => {
+                    self.state.input.wheel_scroll(y.y as f32);
+                }
+            },
+            _ => (),
+        }
+    }
+
     fn window_event(
         &mut self,
         event_loop: &ActiveEventLoop,
@@ -103,35 +82,26 @@ impl ApplicationHandler for App {
                 if let Some(display) = &mut self.display {
                     display.resize(window_size.into());
                 }
-                self.camera
+                self.state
+                    .camera
                     .on_window_resize(window_size.width as f32, window_size.height as f32);
             }
             WindowEvent::KeyboardInput { event, .. } => {
-                self.keys.insert(event.physical_key, event);
+                if let PhysicalKey::Code(key) = event.physical_key {
+                    self.state.input.set_key(key, event);
+                }
             }
             WindowEvent::RedrawRequested => {
-                let now = std::time::Instant::now();
-                let delta = self.last_frame_time.elapsed().as_millis_f32();
-                self.last_frame_time = now;
-
-                self.camera.handle_input(&self.keys, delta);
-
                 if let Some(display) = &mut self.display {
-                    let mut target = display.draw();
+                    let delta = self.state.delta();
 
-                    target.clear_color_and_depth((0.0, 0.0, 1.0, 1.0), f32::MAX);
+                    self.state.new_frame(display);
 
-                    let voxel = Voxel::new([0, 0, 0]);
-                    let voxel_up = Voxel::new([0, 1, 0]);
-                    let voxel_down = Voxel::new([0, -1, 0]);
-                    let voxel_right = Voxel::new([1, 0, 0]);
+                    self.state.camera.handle_input(&self.state.input, delta);
 
-                    voxel.render(display, &mut target, self.camera.as_ref());
-                    voxel_up.render(display, &mut target, self.camera.as_ref());
-                    voxel_right.render(display, &mut target, self.camera.as_ref());
-                    voxel_down.render(display, &mut target, self.camera.as_ref());
+                    draw(display, &mut self.state);
 
-                    target.finish().expect("Failed to finish target");
+                    self.state.end_frame();
 
                     self.window.as_ref().unwrap().request_redraw();
                 }
@@ -139,4 +109,22 @@ impl ApplicationHandler for App {
             _ => (),
         }
     }
+}
+
+fn draw(display: &Display<WindowSurface>, state: &mut State) {
+    let draw_bench = state.benchmark.start("Draw");
+
+    let build_bench = state.benchmark.start("Voxel Build");
+    let voxels = (0..16)
+        .flat_map(|i| (0..16).map(move |j| [i, 0, j]))
+        .map(Voxel::new);
+    build_bench.end();
+
+    let render_bench = state.benchmark.start("Render");
+    for renderable in voxels {
+        renderable.render(display, state);
+    }
+    render_bench.end();
+
+    draw_bench.end();
 }

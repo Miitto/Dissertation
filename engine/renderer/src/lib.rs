@@ -1,8 +1,13 @@
+#![feature(duration_millis_float)]
 pub mod camera;
+mod input;
 pub mod math;
+mod state;
+pub use input::{Input, PositionDelta};
+pub use state::State;
 
 use glium::{
-    Display, Frame,
+    Display,
     glutin::surface::WindowSurface,
     winit::{
         event_loop::{ActiveEventLoop, EventLoop},
@@ -35,10 +40,5 @@ pub enum Dir {
 }
 
 pub trait Renderable {
-    fn render(
-        &self,
-        display: &Display<WindowSurface>,
-        target: &mut Frame,
-        camera: &dyn camera::Camera,
-    );
+    fn render(&self, display: &Display<WindowSurface>, state: &mut State);
 }

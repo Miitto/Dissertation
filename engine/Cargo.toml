@@ -4,16 +4,24 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["renderer", "shader_macros", "shaders", "shaders_common"]
+members = [
+  "benchmark",
+  "renderer",
+  "shader_macros",
+  "shaders",
+  "shaders_common",
+]
 
 [workspace.dependencies]
 glium = "0.36.0"
 renderer = { path = "./renderer/" }
 glam = "0.29.2"
 shaders = { path = "./shaders" }
+benchmark = { path = "./benchmark" }
 
 [dependencies]
 glium.workspace = true
 renderer.workspace = true
 shaders.workspace = true
 glam.workspace = true
+benchmark.workspace = true

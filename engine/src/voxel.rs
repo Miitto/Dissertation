@@ -1,9 +1,6 @@
-use glam::{Mat4, Vec4, mat4, vec4};
-use glium::{
-    Display, DrawParameters, Frame, Surface, draw_parameters, glutin::surface::WindowSurface,
-    uniform,
-};
-use renderer::Renderable;
+use glam::{Mat4, mat4, vec4};
+use glium::{Display, DrawParameters, glutin::surface::WindowSurface, uniform};
+use renderer::{Renderable, State};
 use shaders::Program;
 
 pub struct Voxel {
@@ -75,19 +72,20 @@ impl Voxel {
 }
 
 impl Renderable for Voxel {
-    fn render(
-        &self,
-        display: &Display<WindowSurface>,
-        target: &mut Frame,
-        camera: &dyn renderer::camera::Camera,
-    ) {
+    fn render(&self, display: &Display<WindowSurface>, state: &mut State) {
+        let bchmk = &mut state.benchmark;
+        let render_bench = bchmk.start("Voxel Render");
+
+        let vertex_bench = bchmk.start("Vertices and Indices Get");
         let vertices = Voxel::get_vertices();
         let indices = Voxel::get_indices();
+        vertex_bench.end();
 
+        let uniform_bench = bchmk.start("Uniforms");
         let uniforms = BasicVoxelUniforms {
             modelMatrix: self.get_model_matrix().to_cols_array_2d(),
-            viewMatrix: camera.get_view().to_cols_array_2d(),
-            projectionMatrix: camera.get_projection().to_cols_array_2d(),
+            viewMatrix: state.camera.get_view().to_cols_array_2d(),
+            projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
         };
 
         let uniforms = uniform! {
@@ -95,17 +93,29 @@ impl Renderable for Voxel {
             viewMatrix: uniforms.viewMatrix,
             projectionMatrix: uniforms.projectionMatrix,
         };
+        uniform_bench.end();
 
+        let buffer_bench = bchmk.start("Buffers");
+
+        let vbuf_bench = bchmk.start("Vertex Buffer");
         let v_buf =
             glium::VertexBuffer::new(display, &vertices).expect("Failed to make tri v buffer");
+        vbuf_bench.end();
+
+        let index_bench = bchmk.start("Index Buffer");
         let indices = glium::IndexBuffer::new(
             display,
             glium::index::PrimitiveType::TrianglesList,
             &indices,
         )
         .expect("Failed to make indices buffer");
+        index_bench.end();
 
+        buffer_bench.end();
+
+        let program_bench = bchmk.start("Program");
         let program = BasicVoxel::to_glium(display).expect("Failed to make shader");
+        program_bench.end();
 
         let draw_parameters = DrawParameters {
             depth: glium::Depth {
@@ -117,7 +127,11 @@ impl Renderable for Voxel {
             ..Default::default()
         };
 
-        _ = target.draw(&v_buf, &indices, &program, &uniforms, &draw_parameters);
+        let draw_bench = bchmk.start("Draw");
+        _ = state.draw(&v_buf, &indices, &program, &uniforms, &draw_parameters);
+        draw_bench.end();
+
+        render_bench.end();
     }
 }
 

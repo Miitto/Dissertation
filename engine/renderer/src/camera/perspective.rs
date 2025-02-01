@@ -1,13 +1,11 @@
-use glam::{DQuat, EulerRot, Mat4, Vec3, dvec3, mat3, mat4, vec3, vec4};
-use glium::winit::{
-    event::{ElementState, KeyEvent},
-    keyboard::{KeyCode, PhysicalKey},
-};
+use glam::{DQuat, EulerRot, Mat4, Vec3, vec3};
+use glium::winit::keyboard::KeyCode;
 
-use crate::math::perspective;
+use crate::{Input, math::perspective};
 
 use super::Camera;
 
+#[derive(Debug)]
 pub struct PerspectiveCamera {
     position: Vec3,
     fov: f32,
@@ -16,7 +14,9 @@ pub struct PerspectiveCamera {
     far: f32,
     rotation: DQuat,
     speed: f32,
-    sensitivity: f32,
+    key_sensitivity: f32,
+    mouse_sensitivity: f32,
+    invert_mouse: bool,
 }
 
 impl Default for PerspectiveCamera {
@@ -29,7 +29,9 @@ impl Default for PerspectiveCamera {
             far: 100.0,
             rotation: DQuat::IDENTITY,
             speed: 0.01,
-            sensitivity: 0.1,
+            key_sensitivity: 0.1,
+            mouse_sensitivity: 0.01,
+            invert_mouse: false,
         }
     }
 }
@@ -37,10 +39,6 @@ impl Default for PerspectiveCamera {
 impl Camera for PerspectiveCamera {
     fn on_window_resize(&mut self, width: f32, height: f32) {
         self.aspect_ratio = width / height;
-    }
-
-    fn get_sensitivity(&self) -> f32 {
-        self.sensitivity
     }
 
     fn get_projection(&self) -> Mat4 {
@@ -90,15 +88,23 @@ impl Camera for PerspectiveCamera {
                 self.position.y -= movement;
             }
         }
-
-        dbg!(self.position);
     }
 
-    fn rotate(&mut self, pitch_delta: f64, yaw_delta: f64) {
+    fn rotate(&mut self, mut pitch_delta: f64, yaw_delta: f64, is_mouse: bool) {
+        if is_mouse && !self.invert_mouse {
+            pitch_delta *= -1.;
+        }
+
+        let sensitivity = if is_mouse {
+            self.mouse_sensitivity
+        } else {
+            self.key_sensitivity
+        };
+
         let (x, y, _z) = self.rotation.to_euler(EulerRot::YXZ);
 
-        let y = y + (pitch_delta * self.sensitivity as f64);
-        let mut x = x - (yaw_delta * self.sensitivity as f64);
+        let y = y + (pitch_delta * sensitivity as f64);
+        let mut x = x - (yaw_delta * sensitivity as f64);
 
         const PI: f64 = std::f64::consts::PI;
 
@@ -114,72 +120,51 @@ impl Camera for PerspectiveCamera {
         }
 
         self.rotation = DQuat::from_euler(EulerRot::YXZ, x, y, 0.0);
-
-        let (x, y, z) = self.rotation.to_euler(EulerRot::YXZ);
-
-        println!("{}, {}, {}", x.to_degrees(), y.to_degrees(), z.to_degrees());
     }
 
-    fn handle_input(
-        &mut self,
-        keys: &std::collections::HashMap<glium::winit::keyboard::PhysicalKey, KeyEvent>,
-        delta: f32,
-    ) {
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::KeyW)) {
-            if event.state == ElementState::Pressed {
-                self.translate(crate::Dir::Forward, delta);
-            }
+    fn handle_input(&mut self, input: &Input, delta: f32) {
+        let scroll = input.wheel();
+
+        self.mouse_sensitivity += 0.001 * scroll;
+
+        if input.is_pressed(&KeyCode::KeyW) {
+            self.translate(crate::Dir::Forward, delta);
         }
 
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::KeyS)) {
-            if event.state == ElementState::Pressed {
-                self.translate(crate::Dir::Backward, delta);
-            }
+        if input.is_pressed(&KeyCode::KeyS) {
+            self.translate(crate::Dir::Backward, delta);
         }
 
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::KeyA)) {
-            if event.state == ElementState::Pressed {
-                self.translate(crate::Dir::Left, delta);
-            }
+        if input.is_pressed(&KeyCode::KeyA) {
+            self.translate(crate::Dir::Left, delta);
         }
 
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::KeyD)) {
-            if event.state == ElementState::Pressed {
-                self.translate(crate::Dir::Right, delta);
-            }
+        if input.is_pressed(&KeyCode::KeyD) {
+            self.translate(crate::Dir::Right, delta);
         }
 
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::Space)) {
-            if event.state == ElementState::Pressed {
-                self.translate(crate::Dir::Up, delta);
-            }
+        if input.is_pressed(&KeyCode::Space) {
+            self.translate(crate::Dir::Up, delta);
         }
 
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::ControlLeft)) {
-            if event.state == ElementState::Pressed {
-                self.translate(crate::Dir::Down, delta);
-            }
+        if input.is_pressed(&KeyCode::ControlLeft) {
+            self.translate(crate::Dir::Down, delta);
         }
 
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::ArrowLeft)) {
-            if event.state == ElementState::Pressed {
-                self.rotate(0., -1.);
-            }
+        if input.is_pressed(&KeyCode::ArrowLeft) {
+            self.rotate(0., -1., false);
         }
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::ArrowRight)) {
-            if event.state == ElementState::Pressed {
-                self.rotate(0., 1.);
-            }
+        if input.is_pressed(&KeyCode::ArrowRight) {
+            self.rotate(0., 1., false);
         }
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::ArrowUp)) {
-            if event.state == ElementState::Pressed {
-                self.rotate(1., 0.);
-            }
+        if input.is_pressed(&KeyCode::ArrowUp) {
+            self.rotate(1., 0., false);
         }
-        if let Some(event) = keys.get(&PhysicalKey::Code(KeyCode::ArrowDown)) {
-            if event.state == ElementState::Pressed {
-                self.rotate(-1., 0.);
-            }
+        if input.is_pressed(&KeyCode::ArrowDown) {
+            self.rotate(-1., 0., false);
         }
+
+        let mouse = input.mouse();
+        self.rotate(mouse.y(), mouse.x(), true);
     }
 }
