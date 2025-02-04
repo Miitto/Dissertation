@@ -272,20 +272,9 @@ fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macr
 pub fn program(input: TokenStream) -> TokenStream {
     let mut iter = input.into_iter();
 
-    let (meta, vertex_content, fragment_content, geometry_content) =
-        parse_meta::parse_program_meta(&mut iter);
+    let (meta, content) = parse_meta::parse_program_meta(&mut iter);
 
-    let vertex_shader = parse_glsl::parse_glsl(vertex_content, meta.to_vertex_meta());
-    let fragment_shader = parse_glsl::parse_glsl(fragment_content, meta.to_fragment_meta());
-    let geometry_shader =
-        geometry_content.map(|g| parse_glsl::parse_glsl(g, meta.to_geometry_meta()));
-
-    let program = ProgramInput {
-        meta,
-        vertex_shader,
-        fragment_shader,
-        geometry_shader,
-    };
+    let program = parse_glsl::parse_glsl(content, meta);
 
     // combine all uniforms from all shaders
     let uniforms = program.combined_uniforms();

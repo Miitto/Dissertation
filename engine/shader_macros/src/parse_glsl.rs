@@ -1,92 +1,63 @@
 use proc_macro::{Group, TokenTree};
 
 use crate::{
-    ShaderError, ShaderInput, ShaderMeta,
+    ProgramInput, ProgramMeta, ShaderError, ShaderInput, ShaderMeta,
     shader_var::{ShaderVar, ShaderVarType},
 };
 
+#[derive(Clone, Debug, Default)]
+struct ShaderStruct {
+    name: String,
+    fields: Vec<ShaderVar>,
+}
+
+#[derive(Clone, Debug)]
+struct ShaderFunction {
+    pub return_type: ShaderVarType,
+    pub name: String,
+    pub params: Vec<ShaderVar>,
+    pub content: String,
+}
+
 enum Segment {
     Line(Vec<TokenTree>),
-    #[allow(dead_code)]
     Group(Vec<TokenTree>, Vec<Segment>),
 }
 
-pub fn parse_glsl(input: Group, meta: ShaderMeta) -> ShaderInput {
-    let mut shader_in = vec![];
-    let mut shader_out = vec![];
-    let mut shader_uniforms = vec![];
-
-    let (content, segments) = build_segments(input, true);
-
-    let content = format!("#version {}\n{}", meta.version, content);
-
-    let mut local_vars = vec![];
-    let mut errors = vec![];
-
-    for segment in segments {
-        parse_segment(
-            0,
-            segment,
-            &mut shader_in,
-            &mut shader_out,
-            &mut shader_uniforms,
-            &mut local_vars,
-            &mut errors,
-        );
-    }
-
-    ShaderInput {
-        content,
-        shader_in,
-        shader_out,
-        shader_uniforms,
-        errors,
-    }
+#[derive(Clone, Debug, Default)]
+struct ShaderInfo {
+    pub structs: Vec<ShaderStruct>,
+    pub functions: Vec<ShaderFunction>,
+    pub vertex_fn: Option<ShaderFunction>,
+    pub frame_fn: Option<ShaderFunction>,
+    pub geometry_fn: Option<ShaderFunction>,
 }
 
-fn parse_segment(
+pub fn parse_glsl(input: Group, meta: ProgramMeta) -> ProgramInput {
+    let segments = build_segments(input);
+
+    let mut info = ShaderInfo::default();
+    let mut errors = vec![];
+    let mut local_vars = vec![];
+
+    parse_segments(0, segments, &mut info, &mut local_vars, &mut errors);
+    todo!()
+}
+
+fn parse_segments(
     depth: u32,
-    segment: Segment,
-    shader_in: &mut Vec<ShaderVar>,
-    shader_out: &mut Vec<ShaderVar>,
-    shader_uniforms: &mut Vec<ShaderVar>,
+    segments: Vec<Segment>,
+    info: &mut ShaderInfo,
     local_vars: &mut Vec<ShaderVar>,
     errors: &mut Vec<ShaderError>,
 ) {
-    match segment {
-        Segment::Line(l) => {
-            parse_line(
-                depth,
-                l,
-                shader_in,
-                shader_out,
-                shader_uniforms,
-                local_vars,
-                errors,
-            );
-        }
-        Segment::Group(pre_block, group) => {
-            parse_line(
-                depth,
-                pre_block,
-                shader_in,
-                shader_out,
-                shader_uniforms,
-                local_vars,
-                errors,
-            );
+    let mut iterator = segments.into_iter().peekable();
 
-            for segment in group {
-                parse_segment(
-                    depth + 1,
-                    segment,
-                    shader_in,
-                    shader_out,
-                    shader_uniforms,
-                    local_vars,
-                    errors,
-                );
-            }
+    let next = iterator.next();
+    while let Some(next) = next.as_ref() {
+        match next {
+            Segment::Line(l) => {}
+            Segment::Group(_, _) => {}
         }
     }
 }
@@ -94,9 +65,7 @@ fn parse_segment(
 fn parse_line(
     depth: u32,
     line: Vec<TokenTree>,
-    shader_in: &mut Vec<ShaderVar>,
-    shader_out: &mut Vec<ShaderVar>,
-    shader_uniforms: &mut Vec<ShaderVar>,
+    info: &mut ShaderInfo,
     local_vars: &mut Vec<ShaderVar>,
     errors: &mut Vec<ShaderError>,
 ) {
@@ -108,35 +77,6 @@ fn parse_line(
 
     let first_string = first.to_string();
 
-    // Make in / out / uniforms
-    if first_string == "in" || first_string == "out" || first_string == "uniform" {
-        let var_type = line.get(1).expect("Failed to get var type");
-        let shader_type = var_type.to_string().into();
-        let type_span = var_type.span();
-        let var_name = line.get(2).expect("Failed to get var name");
-        let name_string = var_name.to_string();
-        let name_span = var_name.span();
-
-        let shader_var = ShaderVar::new(shader_type, Some(type_span), name_string, name_span);
-
-        // If we are in a block, error
-        if depth != 0 {
-            errors.push(ShaderError::NestedInOutUniform(
-                first.span(),
-                shader_var.clone(),
-            ));
-        }
-
-        // Also assign as a local var
-        local_vars.push(shader_var.clone());
-
-        match first_string.as_str() {
-            "in" => shader_in.push(shader_var),
-            "out" => shader_out.push(shader_var),
-            "uniform" => shader_uniforms.push(shader_var),
-            _ => unreachable!(),
-        }
-    }
     fn check_type_mismatch(
         found: &ShaderVar,
         var: &TokenTree,
@@ -229,34 +169,14 @@ fn parse_line(
 
 /// Build segments from a token stream
 /// Seperates out while lines, and groups lines into any blocks they may be in
-fn build_segments(input: Group, get_source: bool) -> (String, Vec<Segment>) {
+fn build_segments(input: Group) -> Vec<Segment> {
     let input = input.stream();
 
     let mut segments = vec![];
 
-    let mut content = String::new();
     let mut current_segment = vec![];
 
     for token in input {
-        if get_source {
-            if let TokenTree::Punct(_) = &token {
-            } else if content
-                .chars()
-                .last()
-                .filter(|c| !c.is_whitespace())
-                .is_some()
-            {
-                content.push(' ');
-            }
-            let source = token.span().source_text().unwrap_or(token.to_string());
-            content.push_str(&source);
-            if let TokenTree::Punct(p) = &token {
-                if p.as_char() == ';' {
-                    content.push('\n');
-                }
-            }
-        }
-
         match token {
             TokenTree::Punct(p) => {
                 if p.as_char() == ';' {
@@ -268,7 +188,7 @@ fn build_segments(input: Group, get_source: bool) -> (String, Vec<Segment>) {
                 }
             }
             TokenTree::Group(g) => {
-                let (_, segs) = build_segments(g, false);
+                let segs = build_segments(g);
                 segments.push(Segment::Group(current_segment.clone(), segs));
                 current_segment.clear();
             }
@@ -278,5 +198,5 @@ fn build_segments(input: Group, get_source: bool) -> (String, Vec<Segment>) {
         }
     }
 
-    (content, segments)
+    segments
 }
