@@ -1,6 +1,10 @@
 use std::collections::HashMap;
 
-use glium::winit::{event::KeyEvent, keyboard::KeyCode};
+use glium::winit::{
+    event::{ElementState, KeyEvent, MouseButton},
+    keyboard::KeyCode,
+    window::Window,
+};
 
 #[derive(Clone, Debug, Default)]
 pub struct PositionDelta {
@@ -22,10 +26,17 @@ impl PositionDelta {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct MouseData {
+    position: PositionDelta,
+    buttons: HashMap<MouseButton, ElementState>,
+    is_locked: bool,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Input {
     keys: HashMap<KeyCode, KeyEvent>,
-    mouse: PositionDelta,
+    mouse: MouseData,
     wheel: f32,
 }
 
@@ -46,12 +57,40 @@ impl Input {
         &self.keys
     }
 
-    pub fn mouse(&self) -> &PositionDelta {
-        &self.mouse
+    pub fn mouse_pos(&self) -> &PositionDelta {
+        &self.mouse.position
     }
 
     pub fn mouse_move(&mut self, x: f64, y: f64) {
-        self.mouse = PositionDelta::new(x, y);
+        self.mouse.position = PositionDelta::new(x, y);
+    }
+
+    pub fn click(&mut self, button: MouseButton, state: ElementState) {
+        self.mouse.buttons.insert(button, state);
+    }
+
+    pub fn is_clicked(&self, button: MouseButton) -> bool {
+        self.mouse
+            .buttons
+            .get(&button)
+            .map(|s| s.is_pressed())
+            .unwrap_or(false)
+    }
+
+    pub fn is_cursor_locked(&self) -> bool {
+        self.mouse.is_locked
+    }
+
+    pub fn lock_cursor(&mut self, window: &Window) {
+        self.mouse.is_locked = true;
+        window.set_cursor_visible(false);
+        _ = window.set_cursor_grab(glium::winit::window::CursorGrabMode::Confined);
+    }
+
+    pub fn unlock_cursor(&mut self, window: &Window) {
+        self.mouse.is_locked = false;
+        window.set_cursor_visible(true);
+        _ = window.set_cursor_grab(glium::winit::window::CursorGrabMode::None);
     }
 
     pub fn wheel(&self) -> f32 {
@@ -63,7 +102,7 @@ impl Input {
     }
 
     pub fn end_frame(&mut self) {
-        self.mouse = PositionDelta::default();
+        self.mouse.position = PositionDelta::default();
         self.wheel = 0.;
     }
 }

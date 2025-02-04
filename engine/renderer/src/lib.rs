@@ -40,5 +40,5 @@ pub enum Dir {
 }
 
 pub trait Renderable {
-    fn render(&self, display: &Display<WindowSurface>, state: &mut State);
+    fn render(&self, state: &mut State);
 }

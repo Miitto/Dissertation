@@ -1,13 +1,8 @@
-use glium::{
-    Display,
-    glutin::surface::WindowSurface,
-    winit::{
-        application::ApplicationHandler,
-        event::{DeviceEvent, MouseScrollDelta, WindowEvent},
-        event_loop::ActiveEventLoop,
-        keyboard::PhysicalKey,
-        window::Window,
-    },
+use glium::winit::{
+    application::ApplicationHandler,
+    event::{DeviceEvent, MouseScrollDelta, WindowEvent},
+    event_loop::ActiveEventLoop,
+    keyboard::PhysicalKey,
 };
 use renderer::{Renderable, State, make_event_loop, make_window};
 
@@ -33,8 +28,6 @@ fn main() {
 
 #[derive(Default)]
 struct App {
-    window: Option<Window>,
-    display: Option<Display<WindowSurface>>,
     state: State,
 }
 
@@ -47,8 +40,7 @@ impl ApplicationHandler for App {
             .camera
             .on_window_resize(size.width as f32, size.height as f32);
 
-        self.window = Some(window);
-        self.display = Some(display);
+        self.state.new_window(window, display);
     }
 
     fn device_event(
@@ -59,14 +51,17 @@ impl ApplicationHandler for App {
     ) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                self.state.input.mouse_move(delta.0, delta.1);
+                if delta.0 == 0.0 && delta.1 == 0.0 {
+                    return;
+                }
+                self.state.mouse_move(delta.0, delta.1);
             }
             DeviceEvent::MouseWheel { delta } => match delta {
                 MouseScrollDelta::LineDelta(_, y) => {
-                    self.state.input.wheel_scroll(y);
+                    self.state.wheel_scroll(y);
                 }
                 MouseScrollDelta::PixelDelta(y) => {
-                    self.state.input.wheel_scroll(y.y as f32);
+                    self.state.wheel_scroll(y.y as f32);
                 }
             },
             _ => (),
@@ -82,31 +77,32 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(window_size) => {
-                if let Some(display) = &mut self.display {
+                if let Some(display) = &mut self.state.display {
                     display.resize(window_size.into());
                 }
                 self.state
                     .camera
                     .on_window_resize(window_size.width as f32, window_size.height as f32);
             }
+            WindowEvent::MouseInput { state, button, .. } => {
+                self.state.click(button, state);
+            }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    self.state.input.set_key(key, event);
+                    self.state.set_key(key, event);
                 }
             }
             WindowEvent::RedrawRequested => {
-                if let Some(display) = &mut self.display {
-                    let delta = self.state.delta();
+                if self.state.window.is_some() && self.state.display.is_some() {
+                    self.state.new_frame();
 
-                    self.state.new_frame(display);
+                    self.state.handle_input();
 
-                    self.state.camera.handle_input(&self.state.input, delta);
-
-                    draw(display, &mut self.state);
+                    draw(&mut self.state);
 
                     self.state.end_frame();
 
-                    self.window.as_ref().unwrap().request_redraw();
+                    self.state.window.as_ref().unwrap().request_redraw();
                 }
             }
             _ => (),
@@ -114,7 +110,7 @@ impl ApplicationHandler for App {
     }
 }
 
-fn draw(display: &Display<WindowSurface>, state: &mut State) {
+fn draw(state: &mut State) {
     let draw_bench = state.benchmark.start("Draw");
 
     let build_bench = state.benchmark.start("Voxel Build");
@@ -125,7 +121,7 @@ fn draw(display: &Display<WindowSurface>, state: &mut State) {
 
     let render_bench = state.benchmark.start("Render");
     for renderable in voxels {
-        renderable.render(display, state);
+        renderable.render(state);
     }
     render_bench.end();
 

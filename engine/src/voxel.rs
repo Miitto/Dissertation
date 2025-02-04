@@ -1,5 +1,5 @@
 use glam::{Mat4, mat4, vec4};
-use glium::{Display, DrawParameters, glutin::surface::WindowSurface, uniform};
+use glium::{DrawParameters, uniform};
 use renderer::{Renderable, State};
 use shaders::Program;
 
@@ -72,7 +72,13 @@ impl Voxel {
 }
 
 impl Renderable for Voxel {
-    fn render(&self, display: &Display<WindowSurface>, state: &mut State) {
+    fn render(&self, state: &mut State) {
+        let display = if let Some(display) = &state.display {
+            display
+        } else {
+            return;
+        };
+
         let bchmk = &mut state.benchmark;
         let render_bench = bchmk.start("Voxel Render");
 

@@ -164,7 +164,9 @@ impl Camera for PerspectiveCamera {
             self.rotate(-1., 0., false);
         }
 
-        let mouse = input.mouse();
-        self.rotate(mouse.y(), mouse.x(), true);
+        if input.is_cursor_locked() {
+            let mouse = input.mouse_pos();
+            self.rotate(mouse.y(), mouse.x(), true);
+        }
     }
 }
