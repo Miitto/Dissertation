@@ -1,16 +1,14 @@
 #![feature(proc_macro_diagnostic, proc_macro_span)]
-use proc_macro::{Diagnostic, Level, Span, TokenStream};
+use link_info::LinkedShaderInfo;
+use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use shader_var::ShaderVar;
 
+mod build_glsl;
+mod errors;
+mod link_info;
 mod parse_glsl;
 mod parse_meta;
 mod shader_var;
-
-#[derive(Debug)]
-struct ShaderMeta {
-    version: i32,
-}
 
 #[derive(Debug)]
 struct ProgramMeta {
@@ -19,24 +17,6 @@ struct ProgramMeta {
 }
 
 impl ProgramMeta {
-    pub fn to_vertex_meta(&self) -> ShaderMeta {
-        ShaderMeta {
-            version: self.version,
-        }
-    }
-
-    pub fn to_fragment_meta(&self) -> ShaderMeta {
-        ShaderMeta {
-            version: self.version,
-        }
-    }
-
-    pub fn to_geometry_meta(&self) -> ShaderMeta {
-        ShaderMeta {
-            version: self.version,
-        }
-    }
-
     pub fn ident(&self) -> proc_macro2::Ident {
         format_ident!("{}", self.name)
     }
@@ -50,203 +30,112 @@ impl ProgramMeta {
     }
 }
 
-#[derive(Debug)]
-enum ShaderError {
-    TypeMismatch(Span, ShaderVar, ShaderVar),
-    ParseError(Span, String),
-    NestedInOutUniform(Span, ShaderVar),
+#[proc_macro]
+pub fn program(input: TokenStream) -> TokenStream {
+    let mut iter = input.into_iter();
+
+    let (meta, content) = parse_meta::parse_program_meta(&mut iter);
+
+    let (info, errors) = parse_glsl::parse_glsl(content);
+
+    errors::diagnostics(&errors);
+
+    let vertex_shader = build_glsl::build_vertex_shader(&info, &meta);
+    let fragment_shader = build_glsl::build_fragment_shader(&info, &meta);
+    let geometry_shader = build_glsl::build_geometry_shader(&info, &meta);
+
+    let vertex_struct = make_vertex_struct(meta.vertex_ident(), &info);
+    let uniform_struct = make_uniform_struct(meta.uniforms_ident(), &info);
+
+    let program_impl = make_program(
+        meta.ident(),
+        &vertex_shader,
+        &fragment_shader,
+        geometry_shader.as_ref(),
+    );
+
+    let expanded = quote! {
+        #vertex_struct
+
+        #uniform_struct
+
+        #program_impl
+    };
+
+    expanded.into()
 }
 
-#[derive(Debug)]
-struct ShaderInput {
-    content: String,
-    shader_in: Vec<ShaderVar>,
-    shader_out: Vec<ShaderVar>,
-    shader_uniforms: Vec<ShaderVar>,
-    errors: Vec<ShaderError>,
-}
-
-impl ShaderInput {
-    pub fn check(&self) {
-        for error in &self.errors {
-            use ShaderError::*;
-            match error {
-                TypeMismatch(span, a, b) => {
-                    Diagnostic::spanned(
-                        *span,
-                        Level::Error,
-                        format!(
-                            "{} has type `{:?}` but has type `{:?}` being assigned to it",
-                            a.name, a.r#type, b.r#type
-                        ),
-                    )
-                    .emit();
-                }
-                ParseError(span, msg) => {
-                    Diagnostic::spanned(*span, Level::Error, msg).emit();
-                }
-                NestedInOutUniform(span, var) => {
-                    let mut span = span.join(var.name_span).unwrap();
-                    if let Some(type_span) = var.type_span {
-                        span = span.join(type_span).unwrap();
-                    }
-                    Diagnostic::spanned(
-                        span,
-                        Level::Error,
-                        "Can't nest an input, output, or uniform",
-                    )
-                    .emit();
-                }
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-struct ProgramInput {
-    meta: ProgramMeta,
-    vertex_shader: ShaderInput,
-    fragment_shader: ShaderInput,
-    geometry_shader: Option<ShaderInput>,
-}
-
-impl ProgramInput {
-    pub fn combined_uniforms(&self) -> Vec<ShaderVar> {
-        let mut uniforms = self.vertex_shader.shader_uniforms.clone();
-
-        fn insert_uniform(uniforms: &[ShaderVar], list: &mut Vec<ShaderVar>) {
-            for uniform in uniforms.iter() {
-                let found = list.iter().find(|u| u.name == uniform.name);
-                if let Some(found) = found {
-                    if found.r#type != uniform.r#type {
-                        panic!("Uniforms with the same name must have the same type");
-                    }
-                } else {
-                    list.push(uniform.clone());
-                }
-            }
-        }
-
-        insert_uniform(&self.fragment_shader.shader_uniforms, &mut uniforms);
-
-        if let Some(g) = &self.geometry_shader {
-            insert_uniform(&g.shader_uniforms, &mut uniforms);
-        }
-
-        uniforms
-    }
-
-    pub fn check_in_out(&self) {
-        fn compare_in_out(input: &[ShaderVar], output: &[ShaderVar]) {
-            for i in input.iter() {
-                let found = output.iter().find(|o| o.name == i.name);
-                if let Some(found) = found {
-                    if found.r#type != i.r#type {
-                        let mut span = i.name_span;
-                        if let Some(type_span) = i.type_span {
-                            span = span.join(type_span).unwrap();
-                        }
-
-                        let mut other_span = found.name_span;
-                        if let Some(type_span) = found.type_span {
-                            other_span = other_span.join(type_span).unwrap();
-                        }
-
-                        Diagnostic::spanned(
-                            span,
-                            Level::Error,
-                            format!("Variable {} is an input but with different types", i.name),
-                        )
-                        .emit();
-
-                        Diagnostic::spanned(
-                            other_span,
-                            Level::Error,
-                            format!("Variable {} is an output but with different types", i.name),
-                        )
-                        .emit();
-                    }
-                } else {
-                    Diagnostic::spanned(
-                        i.name_span,
-                        Level::Warning,
-                        format!("Output variable {} is not present in input", i.name),
-                    )
-                    .emit();
-                }
-            }
-        }
-
-        let vertex_send = &self.vertex_shader.shader_out;
-        let vertex_receive = if let Some(g) = &self.geometry_shader {
-            &g.shader_in
-        } else {
-            &self.fragment_shader.shader_in
-        };
-
-        compare_in_out(vertex_send, vertex_receive);
-
-        if let Some(g) = self.geometry_shader.as_ref() {
-            let geometry_send = &g.shader_out;
-            let geometry_receive = &self.fragment_shader.shader_in;
-
-            compare_in_out(geometry_send, geometry_receive);
-        }
-    }
-
-    pub fn check(&self) {
-        self.check_in_out();
-
-        self.vertex_shader.check();
-        self.fragment_shader.check();
-        if let Some(g) = &self.geometry_shader {
-            g.check();
-        }
-    }
-}
-
-fn make_vertex_shader(
-    ident: &proc_macro2::Ident,
-    shader: &ShaderInput,
+fn make_vertex_struct(
+    ident: proc_macro2::Ident,
+    info: &LinkedShaderInfo,
 ) -> proc_macro2::TokenStream {
-    let shader_in = &shader.shader_in;
+    let (fields, field_names) = if let Some(vertex_fn) = &info.vertex_fn {
+        let vertex_input = vertex_fn.params[0].t.get_struct();
 
-    let shader_in_names = shader_in.iter().map(|s| format_ident!("{}", s.name));
-    let vertex_impl = quote! {
-        ::glium::implement_vertex!(#ident #(, #shader_in_names)*);
+        let fields = vertex_input
+            .fields
+            .iter()
+            .map(|f| {
+                let name = format_ident!("{}", f.name);
+                let ty = &f.r#type;
+                quote! {
+                    #name: #ty
+                }
+            })
+            .collect();
+        let names = vertex_input
+            .fields
+            .iter()
+            .map(|f| format_ident!("{}", f.name))
+            .collect();
+
+        (fields, names)
+    } else {
+        (vec![], vec![])
     };
 
     quote! {
-        #[derive(Debug, Copy, Clone)]
+        #[derive(Debug, Clone, Copy)]
         pub struct #ident {
-            #(pub #shader_in)*
+            #(pub #fields),*
         }
 
-        #vertex_impl
+        ::glium::implement_vertex!(#ident, #(#field_names),*);
     }
 }
 
-fn make_uniforms(ident: &proc_macro2::Ident, uniforms: &[ShaderVar]) -> proc_macro2::TokenStream {
+fn make_uniform_struct(
+    ident: proc_macro2::Ident,
+    info: &LinkedShaderInfo,
+) -> proc_macro2::TokenStream {
+    let fields: Vec<proc_macro2::TokenStream> = info
+        .uniforms
+        .iter()
+        .map(|uniform| {
+            let name = format_ident!("{}", uniform.name);
+            let ty = &uniform.t;
+            quote! {
+                #name: #ty
+            }
+        })
+        .collect();
+
     quote! {
-    pub struct #ident {
-        #(pub #uniforms)*
-    }
-
+        pub struct #ident {
+            #(pub #fields),*
         }
+    }
 }
 
-fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macro2::TokenStream {
-    let vert_content = &program.vertex_shader.content;
-    let frag_content = &program.fragment_shader.content;
-    let geom_content = &program.geometry_shader.as_ref().map(|g| &g.content);
-
-    let vert_source = proc_macro2::Literal::string(vert_content.as_str());
-    let frag_source = proc_macro2::Literal::string(frag_content.as_str());
-    let geom_source = if let Some(g) = geom_content {
-        let g = proc_macro2::Literal::string(g.as_str());
-        quote! { Some(#g) }
-    } else {
-        quote! { None }
+fn make_program(
+    ident: proc_macro2::Ident,
+    vertex_source: &str,
+    fragment_source: &str,
+    geom_source: Option<&String>,
+) -> proc_macro2::TokenStream {
+    let geom_source = match geom_source {
+        Some(s) => quote! { Some(#s) },
+        None => quote! { None },
     };
 
     quote! {
@@ -254,11 +143,11 @@ fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macr
 
         impl ::shaders::ProgramInternal for #ident {
             fn vertex() -> &'static str {
-                #vert_source
+                #vertex_source
             }
 
             fn fragment() -> &'static str {
-                #frag_source
+                #fragment_source
             }
 
             fn geometry() -> Option<&'static str> {
@@ -266,33 +155,4 @@ fn make_program(ident: &proc_macro2::Ident, program: &ProgramInput) -> proc_macr
             }
         }
     }
-}
-
-#[proc_macro]
-pub fn program(input: TokenStream) -> TokenStream {
-    let mut iter = input.into_iter();
-
-    let (meta, content) = parse_meta::parse_program_meta(&mut iter);
-
-    let program = parse_glsl::parse_glsl(content, meta);
-
-    // combine all uniforms from all shaders
-    let uniforms = program.combined_uniforms();
-
-    let vertex = make_vertex_shader(&program.meta.vertex_ident(), &program.vertex_shader);
-    let uniforms = make_uniforms(&program.meta.uniforms_ident(), &uniforms);
-
-    program.check();
-
-    let program = make_program(&program.meta.ident(), &program);
-
-    let expanded = quote! {
-        #vertex
-
-        #uniforms
-
-        #program
-    };
-
-    expanded.into()
 }

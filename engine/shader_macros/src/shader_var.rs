@@ -1,7 +1,10 @@
+use std::fmt::Display;
+
 use proc_macro::Span;
 use quote::{format_ident, quote};
 
 #[derive(Clone, Debug)]
+#[expect(dead_code)]
 pub struct ShaderVar {
     pub name: String,
     pub r#type: ShaderVarType,
@@ -25,6 +28,12 @@ impl ShaderVar {
     }
 }
 
+impl Display for ShaderVar {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {}", self.r#type.to_glsl(), self.name)
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderVarType {
     Bool,
@@ -42,9 +51,23 @@ pub enum ShaderVarType {
     Other(String),
 }
 impl ShaderVarType {
-    pub(crate) fn is_type(as_str: &str) -> bool {
-        let converted: ShaderVarType = as_str.into();
-        !matches!(converted, ShaderVarType::Other(_))
+    pub(crate) fn to_glsl(&self) -> String {
+        use ShaderVarType::*;
+        match self {
+            Bool => "bool".to_string(),
+            Int => "int".to_string(),
+            Uint => "uint".to_string(),
+            Float => "float".to_string(),
+            Double => "double".to_string(),
+            Vec2 => "vec2".to_string(),
+            Vec3 => "vec3".to_string(),
+            Vec4 => "vec4".to_string(),
+            Mat2 => "mat2".to_string(),
+            Mat3 => "mat3".to_string(),
+            Mat4 => "mat4".to_string(),
+            DMat4 => "dmat4".to_string(),
+            Other(s) => s.clone(),
+        }
     }
 }
 
@@ -80,6 +103,12 @@ impl From<&str> for ShaderVarType {
             "dmat4" => Self::DMat4,
             _ => Self::Other(value.to_string()),
         }
+    }
+}
+
+impl From<&String> for ShaderVarType {
+    fn from(value: &String) -> Self {
+        value.as_str().into()
     }
 }
 

@@ -142,6 +142,9 @@ impl Renderable for Voxel {
 }
 
 shaders::program!(BasicVoxel, 330, {
+#vertex vertex
+#fragment frag
+
 uniform mat4 modelMatrix;
 uniform mat4 viewMatrix;
 uniform mat4 projectionMatrix;
@@ -155,21 +158,19 @@ struct v2f {
     vec4 vertexColor;
 }
 
-@vertex
 v2f vertex(vIn i) {
     v2f o;
     mat4 pv = projectionMatrix * viewMatrix;
 
     mat4 mvp = pv * modelMatrix;
 
-    o.vertexColor = color;
+    o.vertexColor = i.color;
 
     gl_Position = mvp * vec4(i.position, 1.0);
+    return o;
 }
 
-
-@fragment
 vec4 frag(v2f i) {
-    return vertexColor;
+    return i.vertexColor;
 }
 });

@@ -7,7 +7,6 @@ use glium::winit::{
 use renderer::{Renderable, State, make_event_loop, make_window};
 
 mod voxel;
-
 use voxel::Voxel;
 
 fn main() {
