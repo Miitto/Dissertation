@@ -1,14 +1,16 @@
 #![feature(proc_macro_diagnostic, proc_macro_span)]
-use link_info::LinkedShaderInfo;
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use shader_info::ShaderInfo;
+use shader_var::{ShaderObjects, ShaderType};
 
 mod build_glsl;
 mod errors;
-mod link_info;
 mod parse_glsl;
 mod parse_meta;
+mod shader_info;
 mod shader_var;
+mod type_checking;
 
 #[derive(Debug)]
 struct ProgramMeta {
@@ -36,13 +38,14 @@ pub fn program(input: TokenStream) -> TokenStream {
 
     let (meta, content) = parse_meta::parse_program_meta(&mut iter);
 
-    let (info, errors) = parse_glsl::parse_glsl(content);
-
-    errors::diagnostics(&errors);
+    let info = parse_glsl::parse_glsl(content);
 
     let vertex_shader = build_glsl::build_vertex_shader(&info, &meta);
     let fragment_shader = build_glsl::build_fragment_shader(&info, &meta);
     let geometry_shader = build_glsl::build_geometry_shader(&info, &meta);
+
+    std::fs::write("vertex.glsl", &vertex_shader).unwrap();
+    std::fs::write("fragment.glsl", &fragment_shader).unwrap();
 
     let vertex_struct = make_vertex_struct(meta.vertex_ident(), &info);
     let uniform_struct = make_uniform_struct(meta.uniforms_ident(), &info);
@@ -65,19 +68,24 @@ pub fn program(input: TokenStream) -> TokenStream {
     expanded.into()
 }
 
-fn make_vertex_struct(
-    ident: proc_macro2::Ident,
-    info: &LinkedShaderInfo,
-) -> proc_macro2::TokenStream {
+fn make_vertex_struct(ident: proc_macro2::Ident, info: &ShaderInfo) -> proc_macro2::TokenStream {
     let (fields, field_names) = if let Some(vertex_fn) = &info.vertex_fn {
-        let vertex_input = vertex_fn.params[0].t.get_struct();
+        let in_param = vertex_fn
+            .params
+            .first()
+            .expect("Vertex function must have one parameter");
+
+        let vertex_input = match &in_param.t {
+            ShaderType::Object(ShaderObjects::Custom(s)) => s,
+            _ => panic!("Vertex function must take a struct as input"),
+        };
 
         let fields = vertex_input
             .fields
             .iter()
             .map(|f| {
                 let name = format_ident!("{}", f.name);
-                let ty = &f.r#type;
+                let ty = &f.t;
                 quote! {
                     #name: #ty
                 }
@@ -104,10 +112,7 @@ fn make_vertex_struct(
     }
 }
 
-fn make_uniform_struct(
-    ident: proc_macro2::Ident,
-    info: &LinkedShaderInfo,
-) -> proc_macro2::TokenStream {
+fn make_uniform_struct(ident: proc_macro2::Ident, info: &ShaderInfo) -> proc_macro2::TokenStream {
     let fields: Vec<proc_macro2::TokenStream> = info
         .uniforms
         .iter()

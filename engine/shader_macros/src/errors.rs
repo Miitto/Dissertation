@@ -3,26 +3,34 @@ use proc_macro::{Diagnostic, Level, Span};
 use crate::shader_var::ShaderVar;
 
 #[derive(Debug)]
-#[expect(dead_code)]
+#[allow(dead_code)]
 pub(crate) enum ShaderError {
-    TypeMismatch(Span, ShaderVar, ShaderVar),
+    TypeMismatch {
+        assign_loc: Span,
+        assignee: ShaderVar,
+        assigner: ShaderVar,
+    },
     ParseError(Span, String),
     UnknownVariable(Span, String),
     UnknownType(Span, String),
 }
 
-pub(crate) fn diagnostics(errors: &[ShaderError]) {
-    for error in errors {
+impl ShaderError {
+    pub(crate) fn emit(&self) {
         use ShaderError::*;
-        match error {
+        match self {
             ParseError(span, msg) => {
                 Diagnostic::spanned(*span, Level::Error, msg.clone()).emit();
             }
-            TypeMismatch(span, a, b) => {
+            TypeMismatch {
+                assign_loc,
+                assignee,
+                assigner,
+            } => {
                 Diagnostic::spanned(
-                    *span,
+                    *assign_loc,
                     Level::Error,
-                    format!("Type mismatch: {} is being assigned {}", a, b),
+                    format!("Type mismatch: {} is being assigned {}", assignee, assigner),
                 )
                 .emit();
             }
