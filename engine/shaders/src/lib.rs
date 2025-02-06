@@ -23,6 +23,7 @@ impl<T: 'static + ProgramInternal> Program for T {
     fn get(
         display: &glium::Display<WindowSurface>,
     ) -> Result<Rc<glium::Program>, glium::ProgramCreationError> {
+        optick::event!("Program Get");
         let existing = PROGRAMS.with_borrow(|list| list.get(&TypeId::of::<T>()).cloned());
 
         if let Some(program) = existing {

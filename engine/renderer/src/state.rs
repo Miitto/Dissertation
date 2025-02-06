@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 
-use benchmark::Benchmark;
 use glium::{
     Display, DrawError, DrawParameters, Frame, Program, Surface,
     glutin::surface::WindowSurface,
@@ -24,8 +23,6 @@ pub struct State {
     last_frame_time: std::time::Instant,
     delta_time: f32,
     pub camera: Box<dyn Camera>,
-    pub frame_times: Vec<f32>,
-    pub benchmark: Box<Benchmark>,
     pub target: Option<Frame>,
 }
 
@@ -49,10 +46,9 @@ impl State {
 
     pub fn new_frame(&mut self) {
         if let Some(display) = &self.display {
+            optick::next_frame();
             self.delta_time = self.frame_time();
             self.last_frame_time = std::time::Instant::now();
-
-            self.benchmark.restart();
 
             let mut target = display.draw();
             target.clear_color_and_depth((0.0, 0.0, 1.0, 1.0), f32::MAX);
@@ -62,9 +58,8 @@ impl State {
     }
 
     pub fn end_frame(&mut self) {
+        optick::event!("State End Frame");
         self.input.end_frame();
-        self.frame_times.push(self.frame_time());
-        self.benchmark.end();
 
         if let Some(target) = self.target.take() {
             _ = target.finish();
@@ -84,8 +79,7 @@ impl State {
         U: uniforms::Uniforms,
         V: vertex::MultiVerticesSource<'b>,
     {
-        self.benchmark.draw();
-
+        optick::event!("Draw Call");
         self.target.as_mut().unwrap().draw(
             vertex_buffer,
             index_buffer,
@@ -116,7 +110,6 @@ impl State {
     }
 
     pub fn click(&mut self, button: MouseButton, state: ElementState) {
-        dbg!(button, &state);
         if button == MouseButton::Right {
             if state.is_pressed() {
                 if let Some(window) = &self.window {
@@ -156,8 +149,6 @@ impl Default for State {
             last_frame_time: std::time::Instant::now(),
             delta_time: 0.,
             camera: Box::new(PerspectiveCamera::default()),
-            frame_times: Vec::new(),
-            benchmark: Box::new(Benchmark::new("Frame")),
             target: None,
         }
     }

@@ -20,7 +20,7 @@ struct ProgramMeta {
 
 impl ProgramMeta {
     pub fn ident(&self) -> proc_macro2::Ident {
-        format_ident!("{}", self.name)
+        format_ident!("{}Program", self.name)
     }
 
     pub fn vertex_ident(&self) -> proc_macro2::Ident {
@@ -43,9 +43,6 @@ pub fn program(input: TokenStream) -> TokenStream {
     let vertex_shader = build_glsl::build_vertex_shader(&info, &meta);
     let fragment_shader = build_glsl::build_fragment_shader(&info, &meta);
     let geometry_shader = build_glsl::build_geometry_shader(&info, &meta);
-
-    std::fs::write("vertex.glsl", &vertex_shader).unwrap();
-    std::fs::write("fragment.glsl", &fragment_shader).unwrap();
 
     let vertex_struct = make_vertex_struct(meta.vertex_ident(), &info);
     let uniform_struct = make_uniform_struct(meta.uniforms_ident(), &info);

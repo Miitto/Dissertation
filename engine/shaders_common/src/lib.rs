@@ -29,11 +29,15 @@ impl TryFrom<String> for ShaderType {
 
 impl Display for ShaderType {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            Self::Vertex => "Vertex",
-            Self::Fragment => "Fragment",
-            Self::Geometry => "Geometry",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                Self::Vertex => "Vertex",
+                Self::Fragment => "Fragment",
+                Self::Geometry => "Geometry",
+            }
+        )
     }
 }
 
@@ -44,6 +48,7 @@ pub trait ProgramInternal {
     fn to_glium(
         display: &glium::Display<WindowSurface>,
     ) -> Result<glium::Program, glium::ProgramCreationError> {
+        optick::event!("Program Compile");
         glium::Program::from_source(display, Self::vertex(), Self::fragment(), Self::geometry())
     }
 }

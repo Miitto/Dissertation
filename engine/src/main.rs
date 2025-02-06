@@ -6,23 +6,19 @@ use glium::winit::{
 };
 use renderer::{Renderable, State, make_event_loop, make_window};
 
-mod voxel;
-use voxel::Voxel;
+mod basic;
+mod chunks;
 
 fn main() {
-    let benchmark = {
-        let mut app = App::default();
-        app.state.benchmark.enable();
+    let mut app = App::default();
 
-        let event_loop = make_event_loop();
-        let _ = event_loop.run_app(&mut app);
-        app.state.benchmark
-    };
+    let event_loop = make_event_loop();
+    optick::start_capture();
+    let _ = event_loop.run_app(&mut app);
+    optick::stop_capture("basic");
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
-
-    benchmark.print();
 }
 
 #[derive(Default)]
@@ -110,19 +106,16 @@ impl ApplicationHandler for App {
 }
 
 fn draw(state: &mut State) {
-    let draw_bench = state.benchmark.start("Draw");
+    optick::event!("Draw Logic");
 
-    let build_bench = state.benchmark.start("Voxel Build");
-    let voxels = (0..16)
-        .flat_map(|i| (0..16).map(move |j| [i, 0, j]))
-        .map(Voxel::new);
-    build_bench.end();
+    let renderables = basic::get_renderables();
 
-    let render_bench = state.benchmark.start("Render");
-    for renderable in voxels {
-        renderable.render(state);
+    fn render(state: &mut State, renderables: &[Box<dyn Renderable>]) {
+        optick::event!("Render");
+        for renderable in renderables {
+            renderable.render(state);
+        }
     }
-    render_bench.end();
 
-    draw_bench.end();
+    render(state, &renderables);
 }

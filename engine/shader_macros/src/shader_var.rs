@@ -187,8 +187,8 @@ impl ToTokens for ShaderPrimatives {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             ShaderPrimatives::Bool => tokens.extend(quote! {bool}),
-            ShaderPrimatives::Int => tokens.extend(quote! {int}),
-            ShaderPrimatives::UInt => tokens.extend(quote! {uint}),
+            ShaderPrimatives::Int => tokens.extend(quote! {i32}),
+            ShaderPrimatives::UInt => tokens.extend(quote! {u32}),
             ShaderPrimatives::Float => tokens.extend(quote! {float}),
             ShaderPrimatives::Double => tokens.extend(quote! {double}),
         }

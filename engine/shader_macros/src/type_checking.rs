@@ -48,6 +48,9 @@ fn check_assignment(
                     .collect::<String>();
                 let rest_line_str = rest_line.iter().map(|t| t.to_string()).collect::<String>();
 
+                //println!("Member: {}", member_line_str);
+                //println!("Rest: {}", rest_line_str);
+
                 ShaderError::TypeMismatch {
                     assign_loc: rest_span,
                     assignee: ShaderVar {
@@ -129,20 +132,38 @@ fn member_walk(in_type: &ShaderType, line: &[TokenTree]) -> (usize, Option<Shade
     (0, None)
 }
 
-fn walk(line: &[TokenTree], local_vars: &[ShaderVar], info: &ShaderInfo) -> Option<ShaderType> {
+fn walk(mut line: &[TokenTree], local_vars: &[ShaderVar], info: &ShaderInfo) -> Option<ShaderType> {
     if line.is_empty() {
         return None;
     }
 
     if !line.is_empty() {
+        // TODO: Hack until paren blocks are implemented
+        if line[0].is_punct('#') {
+            line = &line[1..];
+        }
+
         let var_type = info.get_type(&line[0], local_vars);
+        println!("Var type: {:?}", var_type);
 
         if !matches!(var_type, ShaderType::Unknown(_)) {
             let (member_len, var_type) = member_walk(&var_type, &line[1..]);
             if let Some(var_type) = var_type {
+                println!("Member Var Type: {:?}", var_type);
                 let rest_line = &line[member_len + 1..];
 
                 if rest_line.is_empty() {
+                    return Some(var_type);
+                }
+
+                println!(
+                    "Rest Line: {:?}",
+                    rest_line.iter().map(|t| t.to_string()).collect::<String>()
+                );
+
+                let p = &rest_line[0];
+
+                if p.is_punct('&') || p.is_punct('<') || p.is_punct('>') || p.is_punct('|') {
                     return Some(var_type);
                 }
 
