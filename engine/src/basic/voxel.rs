@@ -13,7 +13,7 @@ impl Voxel {
     }
 }
 
-impl BasicVoxelVertex {
+impl basic_voxel::Vertex {
     pub fn new(x: f32, y: f32, z: f32, color: [f32; 4]) -> Self {
         Self {
             position: [x, y, z],
@@ -23,23 +23,23 @@ impl BasicVoxelVertex {
 }
 
 impl Voxel {
-    pub fn get_vertices() -> Box<[BasicVoxelVertex]> {
+    pub fn get_vertices() -> Box<[basic_voxel::Vertex]> {
         // 0
-        let fbl = BasicVoxelVertex::new(0., 0., 0., [1., 0., 0., 1.]);
+        let fbl = basic_voxel::Vertex::new(0., 0., 0., [1., 0., 0., 1.]);
         // 1
-        let ftl = BasicVoxelVertex::new(0., 1., 0., [1., 0., 0., 1.]);
+        let ftl = basic_voxel::Vertex::new(0., 1., 0., [1., 0., 0., 1.]);
         // 2
-        let ftr = BasicVoxelVertex::new(1., 1., 0., [1., 0., 0., 1.]);
+        let ftr = basic_voxel::Vertex::new(1., 1., 0., [1., 0., 0., 1.]);
         // 3
-        let fbr = BasicVoxelVertex::new(1., 0., 0., [1., 0., 0., 1.]);
+        let fbr = basic_voxel::Vertex::new(1., 0., 0., [1., 0., 0., 1.]);
         // 4
-        let bbl = BasicVoxelVertex::new(0., 0., 1., [0., 1., 0., 1.]);
+        let bbl = basic_voxel::Vertex::new(0., 0., 1., [0., 1., 0., 1.]);
         // 5
-        let btl = BasicVoxelVertex::new(0., 1., 1., [0., 1., 0., 1.]);
+        let btl = basic_voxel::Vertex::new(0., 1., 1., [0., 1., 0., 1.]);
         // 6
-        let btr = BasicVoxelVertex::new(1., 1., 1., [0., 1., 0., 1.]);
+        let btr = basic_voxel::Vertex::new(1., 1., 1., [0., 1., 0., 1.]);
         // 7
-        let bbr = BasicVoxelVertex::new(1., 0., 1., [0., 1., 0., 1.]);
+        let bbr = basic_voxel::Vertex::new(1., 0., 1., [0., 1., 0., 1.]);
 
         Box::new([fbl, ftl, ftr, fbr, bbl, btl, btr, bbr])
     }
@@ -83,7 +83,7 @@ impl Renderable for Voxel {
         let vertices = Voxel::get_vertices();
         let indices = Voxel::get_indices();
 
-        let uniforms = BasicVoxelUniforms {
+        let uniforms = basic_voxel::Uniforms {
             modelMatrix: self.get_model_matrix().to_cols_array_2d(),
             viewMatrix: state.camera.get_view().to_cols_array_2d(),
             projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
@@ -104,7 +104,7 @@ impl Renderable for Voxel {
         )
         .expect("Failed to make indices buffer");
 
-        let program = BasicVoxelProgram::get(display).expect("Failed to make shader");
+        let program = basic_voxel::Program::get(display).expect("Failed to make shader");
 
         let draw_parameters = DrawParameters {
             depth: glium::Depth {
@@ -120,7 +120,7 @@ impl Renderable for Voxel {
     }
 }
 
-shaders::program!(BasicVoxel, 330, {
+shaders::program!(basic_voxel, {
 #vertex vertex
 #fragment frag
 

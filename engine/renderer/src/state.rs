@@ -51,7 +51,7 @@ impl State {
             self.last_frame_time = std::time::Instant::now();
 
             let mut target = display.draw();
-            target.clear_color_and_depth((0.0, 0.0, 1.0, 1.0), f32::MAX);
+            target.clear_color_and_depth((0.1, 0.1, 0.1, 1.0), f32::MAX);
 
             self.target = Some(target);
         }

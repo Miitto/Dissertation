@@ -5,25 +5,45 @@ use glium::winit::{
     keyboard::PhysicalKey,
 };
 use renderer::{Renderable, State, make_event_loop, make_window};
+use tests::Test;
 
 mod basic;
 mod chunks;
+mod tests;
+
+const TEST: Test = Test::Cube;
 
 fn main() {
-    let mut app = App::default();
+    let name = if cfg!(feature = "chunks") {
+        println!("Running chunks test");
+        "chunks"
+    } else {
+        println!("Running basic test");
+        "basic"
+    };
+
+    let mut app = App::new();
 
     let event_loop = make_event_loop();
     optick::start_capture();
     let _ = event_loop.run_app(&mut app);
-    optick::stop_capture("basic");
+    optick::stop_capture(name);
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
 }
 
-#[derive(Default)]
 struct App {
     state: State,
+    setup: Option<Box<dyn Renderable>>,
+}
+
+impl App {
+    fn new() -> Self {
+        let state = State::default();
+
+        Self { state, setup: None }
+    }
 }
 
 impl ApplicationHandler for App {
@@ -91,9 +111,17 @@ impl ApplicationHandler for App {
                 if self.state.window.is_some() && self.state.display.is_some() {
                     self.state.new_frame();
 
+                    if self.setup.is_none() {
+                        self.setup = Some(if cfg!(feature = "chunks") {
+                            Box::new(chunks::setup(TEST, &self.state)) as Box<dyn Renderable>
+                        } else {
+                            Box::new(basic::setup(TEST)) as Box<dyn Renderable>
+                        });
+                    }
+
                     self.state.handle_input();
 
-                    draw(&mut self.state);
+                    self.setup.as_ref().unwrap().render(&mut self.state);
 
                     self.state.end_frame();
 
@@ -103,19 +131,4 @@ impl ApplicationHandler for App {
             _ => (),
         }
     }
-}
-
-fn draw(state: &mut State) {
-    optick::event!("Draw Logic");
-
-    let renderables = basic::get_renderables();
-
-    fn render(state: &mut State, renderables: &[Box<dyn Renderable>]) {
-        optick::event!("Render");
-        for renderable in renderables {
-            renderable.render(state);
-        }
-    }
-
-    render(state, &renderables);
 }

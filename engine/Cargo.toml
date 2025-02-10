@@ -22,3 +22,8 @@ renderer.workspace = true
 shaders.workspace = true
 glam.workspace = true
 optick.workspace = true
+
+[features]
+default = ["chunks"]
+frustum = ["chunks"]
+chunks = []

@@ -1,43 +1,35 @@
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum BlockType {
     Air,
     Grass,
     // etc.
 }
 
-pub struct Pos(u16);
-
-impl Pos {
-    pub fn new(x: u8, y: u8, z: u8) -> Self {
-        if x > 31 || y > 31 || z > 31 {
-            panic!("Invalid position: ({}, {}, {})", x, y, z);
-        }
-
-        let x = x as u16;
-        let y = y as u16;
-        let z = z as u16;
-
-        Self((x << 10) | (y << 5) | z)
-    }
-
-    pub fn x(&self) -> u8 {
-        ((self.0 >> 10) & 0b11111) as u8
-    }
-
-    pub fn y(&self) -> u8 {
-        ((self.0 >> 5) & 0b11111) as u8
-    }
-
-    pub fn z(&self) -> u8 {
-        (self.0 & 0b11111) as u8
-    }
-}
-
+#[derive(Clone, Copy, Debug)]
 pub struct Voxel {
-    position: Pos,
+    block_type: BlockType,
 }
 
-shaders::program!(ChunkVoxel, 330, {
+impl Voxel {
+    pub fn new(block_type: BlockType) -> Self {
+        Self { block_type }
+    }
+
+    pub fn is_solid(&self) -> bool {
+        self.block_type != BlockType::Air
+    }
+    pub fn set_type(&mut self, block_type: BlockType) {
+        self.block_type = block_type;
+    }
+}
+
+impl chunk_voxel::Vertex {
+    pub fn new(v_pos: [f32; 3]) -> Self {
+        Self { v_pos }
+    }
+}
+
+shaders::program!(chunk_voxel, {
     #vertex vert
     #fragment frag
 
@@ -46,28 +38,94 @@ shaders::program!(ChunkVoxel, 330, {
     uniform mat4 modelMatrix;
 
     struct vIn {
-        uint position;
+        vec3 v_pos;
+    }
+
+    struct iIn {
+        uint data;
     }
 
     struct v2f {
         vec4 color;
     }
 
-    v2f vert(vIn input) {
+    v2f vert(vIn v, iIn i) {
         v2f o;
-        o.color = vec4(1.0, 0.0, 0.0, 1.0);
 
         mat4 vp = projectionMatrix * viewMatrix;
         mat4 mvp = vp * modelMatrix;
 
-        uint x = input.position >> 10;
-        uint y = (input.position >> 5) & 0b11111;
-        uint z = input.position & 0b11111;
+        float v_x = v.v_pos.x;
+        float v_y = v.v_pos.y;
+        float v_z = v.v_pos.z;
 
-        gl_Position = mvp * vec4(0.0, 0.0, 0.0, 1.0);
+        float in_x = float(i.data >> 10 & 31);
+        float in_y = float((i.data >> 5) & 31);
+        float in_z = float(i.data & 31);
+
+        uint direction = (i.data >> 15) & 7;
+
+        float x;
+        float y;
+        float z;
+
+        // front back bottom top left right
+        switch (direction) {
+            case 0: {
+                z = 1;
+                x = v_x;
+                y = v_z;
+                o.color = vec4(0.0, 1.0, 0.0, 1.0);
+                break;
+            }
+            case 1: {
+                z = 0;
+                x = 1-v_x;
+                y = v_z;
+                o.color = vec4(0.0, 0.0, 1.0, 1.0);
+                break;
+            }
+            case 2: {
+                x = v_x;
+                y = 0;
+                z = v_z;
+                o.color = vec4(1.0, 0.0, 0.0, 1.0);
+                break;
+            }
+              case 3: {
+                x = 1-v_x;
+                y = 1;
+                z = v_z;
+                o.color = vec4(1.0, 1.0, 0.0, 1.0);
+                break;
+            }
+            case 4: {
+                x = 0;
+                y = 1-v_x;
+                z = v_z;
+                o.color = vec4(1.0, 0.0, 1.0, 1.0);
+                break;
+            }
+            case 5: {
+                x = 1;
+                y = v_x;
+                z = v_z;
+                o.color = vec4(0.0, 1.0, 1.0, 1.0);
+                break;
+            }
+        }
+
+        float o_x = x + in_x;
+        float o_y = y + in_y;
+        float o_z = z + in_z;
+
+        gl_Position = mvp * vec4(o_x, o_y, o_z, 1.0);
+
+
+        return o;
     }
 
-    vec4 frag(v2f input) {
-        return input.color;
+    vec4 frag(v2f i) {
+        return i.color;
     }
 });
