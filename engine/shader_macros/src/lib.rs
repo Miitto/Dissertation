@@ -1,160 +1,68 @@
 #![feature(proc_macro_diagnostic, proc_macro_span)]
+use std::{fs::OpenOptions, io::Write};
+
+use parse::meta::ProgramMeta;
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
+use quote::quote;
 use shader_info::ShaderInfo;
-use shader_var::{ShaderObjects, ShaderType};
+use syn::{
+    braced,
+    parse::{ParseBuffer, ParseStream},
+    parse_macro_input,
+};
 
 mod build_glsl;
+mod build_rust;
 mod errors;
-mod parse_glsl;
-mod parse_meta;
+mod parse;
 mod shader_info;
 mod shader_var;
-mod type_checking;
 
-#[derive(Debug)]
-struct ProgramMeta {
-    name: String,
-    version: i32,
+struct ProgramInput {
+    meta: ProgramMeta,
+    content: ShaderInfo,
 }
 
-impl ProgramMeta {
-    pub fn ident(&self) -> proc_macro2::Ident {
-        format_ident!("{}Program", self.name)
-    }
+impl syn::parse::Parse for ProgramInput {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        let meta = input.parse()?;
+        let content: ParseBuffer;
+        _ = braced!(content in input);
 
-    pub fn vertex_ident(&self) -> proc_macro2::Ident {
-        format_ident!("{}Vertex", self.name)
-    }
+        let info = content.parse()?;
 
-    pub fn uniforms_ident(&self) -> proc_macro2::Ident {
-        format_ident!("{}Uniforms", self.name)
+        Ok(Self {
+            meta,
+            content: info,
+        })
     }
 }
 
 #[proc_macro]
 pub fn program(input: TokenStream) -> TokenStream {
-    let mut iter = input.into_iter();
+    let input = parse_macro_input!(input as ProgramInput);
 
-    let (meta, content) = parse_meta::parse_program_meta(&mut iter);
+    let vertex_shader = build_glsl::vertex_shader(&input);
+    let fragment_shader = build_glsl::fragment_shader(&input);
+    let geometry_shader = build_glsl::geometry_shader(&input);
 
-    let info = parse_glsl::parse_glsl(content);
+    let vertex_struct = build_rust::vertex_struct(&input);
+    let uniform_struct = build_rust::uniform_struct(&input);
 
-    let vertex_shader = build_glsl::build_vertex_shader(&info, &meta);
-    let fragment_shader = build_glsl::build_fragment_shader(&info, &meta);
-    let geometry_shader = build_glsl::build_geometry_shader(&info, &meta);
+    let program_impl =
+        build_rust::program(&vertex_shader, &fragment_shader, geometry_shader.as_ref());
 
-    let vertex_struct = make_vertex_struct(meta.vertex_ident(), &info);
-    let uniform_struct = make_uniform_struct(meta.uniforms_ident(), &info);
-
-    let program_impl = make_program(
-        meta.ident(),
-        &vertex_shader,
-        &fragment_shader,
-        geometry_shader.as_ref(),
-    );
+    let name = input.meta.name;
 
     let expanded = quote! {
+        pub mod #name {
         #vertex_struct
 
         #uniform_struct
 
         #program_impl
+        }
     };
 
     expanded.into()
-}
-
-fn make_vertex_struct(ident: proc_macro2::Ident, info: &ShaderInfo) -> proc_macro2::TokenStream {
-    let (fields, field_names) = if let Some(vertex_fn) = &info.vertex_fn {
-        let in_param = vertex_fn
-            .params
-            .first()
-            .expect("Vertex function must have one parameter");
-
-        let vertex_input = match &in_param.t {
-            ShaderType::Object(ShaderObjects::Custom(s)) => s,
-            _ => panic!("Vertex function must take a struct as input"),
-        };
-
-        let fields = vertex_input
-            .fields
-            .iter()
-            .map(|f| {
-                let name = format_ident!("{}", f.name);
-                let ty = &f.t;
-                quote! {
-                    #name: #ty
-                }
-            })
-            .collect();
-        let names = vertex_input
-            .fields
-            .iter()
-            .map(|f| format_ident!("{}", f.name))
-            .collect();
-
-        (fields, names)
-    } else {
-        (vec![], vec![])
-    };
-
-    quote! {
-        #[derive(Debug, Clone, Copy)]
-        pub struct #ident {
-            #(pub #fields),*
-        }
-
-        ::glium::implement_vertex!(#ident, #(#field_names),*);
-    }
-}
-
-fn make_uniform_struct(ident: proc_macro2::Ident, info: &ShaderInfo) -> proc_macro2::TokenStream {
-    let fields: Vec<proc_macro2::TokenStream> = info
-        .uniforms
-        .iter()
-        .map(|uniform| {
-            let name = format_ident!("{}", uniform.name);
-            let ty = &uniform.t;
-            quote! {
-                #name: #ty
-            }
-        })
-        .collect();
-
-    quote! {
-        pub struct #ident {
-            #(pub #fields),*
-        }
-    }
-}
-
-fn make_program(
-    ident: proc_macro2::Ident,
-    vertex_source: &str,
-    fragment_source: &str,
-    geom_source: Option<&String>,
-) -> proc_macro2::TokenStream {
-    let geom_source = match geom_source {
-        Some(s) => quote! { Some(#s) },
-        None => quote! { None },
-    };
-
-    quote! {
-        pub struct #ident;
-
-        impl ::shaders::ProgramInternal for #ident {
-            fn vertex() -> &'static str {
-                #vertex_source
-            }
-
-            fn fragment() -> &'static str {
-                #fragment_source
-            }
-
-            fn geometry() -> Option<&'static str> {
-                #geom_source
-            }
-        }
-    }
 }

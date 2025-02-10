@@ -1,7 +1,8 @@
 use std::fmt::Display;
 
-use proc_macro::{Ident, Span};
+use proc_macro2::Span;
 use quote::{ToTokens, quote};
+use syn::Ident;
 
 #[derive(Clone, Debug)]
 #[expect(dead_code)]
@@ -304,10 +305,10 @@ impl ToTokens for ShaderObjects {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub(crate) struct ShaderStruct {
-    pub name: String,
+    pub name: Ident,
     pub fields: Vec<ShaderVar>,
 }
 

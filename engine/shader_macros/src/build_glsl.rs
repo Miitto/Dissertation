@@ -1,5 +1,5 @@
 use crate::{
-    ProgramMeta, ShaderInfo,
+    ProgramInput, ShaderInfo,
     shader_var::{ShaderObjects, ShaderType},
 };
 
@@ -27,7 +27,12 @@ fn get_functions(info: &ShaderInfo) -> String {
         .join("\n")
 }
 
-pub fn build_vertex_shader(info: &ShaderInfo, meta: &ProgramMeta) -> String {
+pub fn vertex_shader(
+    ProgramInput {
+        content: info,
+        meta,
+    }: &ProgramInput,
+) -> String {
     let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
@@ -43,21 +48,62 @@ pub fn build_vertex_shader(info: &ShaderInfo, meta: &ProgramMeta) -> String {
         }
     };
 
-    let in_vars = vertex_input
-        .fields
-        .iter()
-        .map(|f| format!("in {} {};", f.t, f.name))
-        .collect::<Vec<String>>()
-        .join("\n");
+    let in_vars = {
+        let iter = vertex_input.fields.iter();
+
+        if let Some(instance) = vertex_fn.params.get(1).map(|i| match &i.t {
+            ShaderType::Object(ShaderObjects::Custom(s)) => s,
+            _ => {
+                panic!("Vertex function must take a struct as input");
+            }
+        }) {
+            let iter = iter.chain(instance.fields.iter());
+            iter.map(|f| format!("in {} {};", f.t, f.name))
+                .collect::<Vec<String>>()
+                .join("\n")
+        } else {
+            iter.map(|f| format!("in {} {};", f.t, f.name))
+                .collect::<Vec<String>>()
+                .join("\n")
+        }
+    };
 
     let in_to_struct_assign = vertex_input
         .fields
         .iter()
-        .map(|f| format!("    input.{} = {};", f.name, f.name))
+        .map(|f| format!("    vertex_input.{} = {};", f.name, f.name))
         .collect::<Vec<String>>()
         .join("\n");
 
-    let in_to_struct = format!("{} input;\n{}", vertex_input.name, in_to_struct_assign);
+    let in_to_struct = format!(
+        "{} vertex_input;\n{}",
+        vertex_input.name, in_to_struct_assign
+    );
+
+    let (instance_to_struct, main_instance_param) = if let Some(instance) =
+        vertex_fn.params.get(1).map(|i| match &i.t {
+            ShaderType::Object(ShaderObjects::Custom(s)) => s,
+            _ => {
+                panic!("Vertex function must take a struct as input");
+            }
+        }) {
+        let instance_to_struct_assign = instance
+            .fields
+            .iter()
+            .map(|f| format!("    instance_input.{} = {};", f.name, f.name))
+            .collect::<Vec<String>>()
+            .join("\n");
+
+        (
+            format!(
+                "{} instance_input;\n{}",
+                instance.name, instance_to_struct_assign
+            ),
+            String::from(", instance_input"),
+        )
+    } else {
+        (String::default(), String::default())
+    };
 
     let vertex_out_struct = match &vertex_fn.return_type {
         ShaderType::Object(ShaderObjects::Custom(s)) => s,
@@ -76,7 +122,12 @@ pub fn build_vertex_shader(info: &ShaderInfo, meta: &ProgramMeta) -> String {
     let struct_to_out_assign = vertex_out_struct
         .fields
         .iter()
-        .map(|f| format!("{}_{} = output.{};", vertex_out_struct.name, f.name, f.name))
+        .map(|f| {
+            format!(
+                "{}_{} = vertex_output.{};",
+                vertex_out_struct.name, f.name, f.name
+            )
+        })
         .collect::<Vec<String>>()
         .join("\n");
 
@@ -105,17 +156,28 @@ void main() {{
     // In
     {in_to_struct}
 
+    {instance_to_struct}
+
     // Out
-    {} output = {}(input);
+    {} vertex_output = {}(vertex_input{});
     {}
 }}"#,
-        meta.version, vertex_fn.return_type, vertex_fn.name, struct_to_out_assign
+        meta.version,
+        vertex_fn.return_type,
+        vertex_fn.name,
+        main_instance_param,
+        struct_to_out_assign
     );
 
     content
 }
 
-pub fn build_fragment_shader(info: &ShaderInfo, meta: &ProgramMeta) -> String {
+pub fn fragment_shader(
+    ProgramInput {
+        content: info,
+        meta,
+    }: &ProgramInput,
+) -> String {
     let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
@@ -141,11 +203,16 @@ pub fn build_fragment_shader(info: &ShaderInfo, meta: &ProgramMeta) -> String {
     let in_to_struct_assign = frag_input
         .fields
         .iter()
-        .map(|f| format!("    input.{} = {}_{};", f.name, frag_input.name, f.name))
+        .map(|f| {
+            format!(
+                "    frag_input.{} = {}_{};",
+                f.name, frag_input.name, f.name
+            )
+        })
         .collect::<Vec<String>>()
         .join("\n");
 
-    let in_to_struct = format!("{} input;\n{}", frag_input.name, in_to_struct_assign);
+    let in_to_struct = format!("{} frag_input;\n{}", frag_input.name, in_to_struct_assign);
 
     let out_var_type = frag_fn.return_type.to_string();
 
@@ -175,7 +242,7 @@ void main() {{
     {in_to_struct}
 
     // Out
-    frag_output = {}(input);
+    frag_output = {}(frag_input);
 }}"#,
         meta.version, frag_fn.name
     );
@@ -184,7 +251,12 @@ void main() {{
 }
 
 #[expect(unreachable_code, unused_variables)]
-pub fn build_geometry_shader(info: &ShaderInfo, meta: &ProgramMeta) -> Option<String> {
+pub fn geometry_shader(
+    ProgramInput {
+        content: info,
+        meta,
+    }: &ProgramInput,
+) -> Option<String> {
     return None;
     let uniforms = get_uniforms(info);
 
@@ -210,11 +282,11 @@ pub fn build_geometry_shader(info: &ShaderInfo, meta: &ProgramMeta) -> Option<St
         let in_to_struct_assign = geom_input
             .fields
             .iter()
-            .map(|f| format!("    input.{} = {};", f.name, f.name))
+            .map(|f| format!("    geom_input.{} = {};", f.name, f.name))
             .collect::<Vec<String>>()
             .join("\n");
 
-        let in_to_struct = format!("{} input;\n{}", geom_input.name, in_to_struct_assign);
+        let in_to_struct = format!("{} geom_input;\n{}", geom_input.name, in_to_struct_assign);
 
         let geom_out_struct = match &geom_fn.return_type {
             ShaderType::Object(ShaderObjects::Custom(s)) => s,
@@ -233,7 +305,12 @@ pub fn build_geometry_shader(info: &ShaderInfo, meta: &ProgramMeta) -> Option<St
         let struct_to_out_assign = geom_out_struct
             .fields
             .iter()
-            .map(|f| format!("{}_{} = output.{};", geom_out_struct.name, f.name, f.name))
+            .map(|f| {
+                format!(
+                    "{}_{} = geom_output.{};",
+                    geom_out_struct.name, f.name, f.name
+                )
+            })
             .collect::<Vec<String>>()
             .join("\n");
 
@@ -263,7 +340,7 @@ void main() {{
     {in_to_struct}
 
     // Out
-    {} output = {}(input);
+    {} geom_output = {}(input);
     {}
 }}"#,
             meta.version, geom_fn.return_type, geom_fn.name, struct_to_out_assign

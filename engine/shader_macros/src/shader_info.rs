@@ -1,4 +1,5 @@
-use proc_macro::{Ident, Span, TokenTree};
+use proc_macro2::Span;
+use syn::{Ident, parse::ParseStream};
 
 use crate::shader_var::{
     ShaderFunction, ShaderObjects, ShaderPrimatives, ShaderStruct, ShaderType, ShaderVar,
@@ -14,63 +15,62 @@ pub(crate) struct ShaderInfo {
     pub geometry_fn: Option<ShaderFunction>,
 }
 
+impl syn::parse::Parse for ShaderInfo {
+    fn parse(input: ParseStream) -> syn::Result<Self> {
+        crate::parse::glsl::parse_glsl(input)
+    }
+}
+
 impl ShaderInfo {
-    pub fn get_type(&self, type_name: &TokenTree, local_vars: &[ShaderVar]) -> ShaderType {
-        match type_name {
-            TokenTree::Literal(lit) => {
-                let lit = lit.to_string();
-
-                if lit.parse::<i32>().is_ok() {
-                    return ShaderType::Primative(ShaderPrimatives::Int);
-                }
-
-                if lit.chars().last().is_some_and(|c| c == 'f') || lit.parse::<f32>().is_ok() {
-                    return ShaderType::Primative(ShaderPrimatives::Float);
-                }
+    pub fn get_type(
+        &self,
+        ident: &Ident,
+        local_vars: &[ShaderVar],
+        use_vars: bool,
+    ) -> syn::Result<ShaderType> {
+        if use_vars {
+            if let Some(var) = self.get_var(ident, local_vars) {
+                return Ok(var.t);
             }
-            TokenTree::Ident(ident) => {
-                if let Some(var) = self.get_var(ident, local_vars) {
-                    return var.t;
-                }
-
-                let type_name = ident.to_string();
-                let primative = match type_name.as_str() {
-                    "int" => Some(ShaderType::Primative(ShaderPrimatives::Int)),
-                    "uint" => Some(ShaderType::Primative(ShaderPrimatives::UInt)),
-                    "float" => Some(ShaderType::Primative(ShaderPrimatives::Float)),
-                    "double" => Some(ShaderType::Primative(ShaderPrimatives::Double)),
-                    "bool" => Some(ShaderType::Primative(ShaderPrimatives::Bool)),
-                    _ => None,
-                };
-
-                if let Some(p) = primative {
-                    return p;
-                }
-
-                let object = match type_name.as_str() {
-                    "vec2" => Some(ShaderType::Object(ShaderObjects::Vec2)),
-                    "vec3" => Some(ShaderType::Object(ShaderObjects::Vec3)),
-                    "vec4" => Some(ShaderType::Object(ShaderObjects::Vec4)),
-                    "mat2" => Some(ShaderType::Object(ShaderObjects::Mat2)),
-                    "mat3" => Some(ShaderType::Object(ShaderObjects::Mat3)),
-                    "mat4" => Some(ShaderType::Object(ShaderObjects::Mat4)),
-                    _ => None,
-                };
-
-                if let Some(o) = object {
-                    return o;
-                }
-
-                for s in &self.structs {
-                    if s.name == *type_name {
-                        return ShaderType::Object(ShaderObjects::Custom(s.clone()));
-                    }
-                }
-            }
-            _ => {}
         }
 
-        ShaderType::Unknown(type_name.to_string())
+        let primative = match ident.to_string().as_str() {
+            "int" => Some(ShaderType::Primative(ShaderPrimatives::Int)),
+            "uint" => Some(ShaderType::Primative(ShaderPrimatives::UInt)),
+            "float" => Some(ShaderType::Primative(ShaderPrimatives::Float)),
+            "double" => Some(ShaderType::Primative(ShaderPrimatives::Double)),
+            "bool" => Some(ShaderType::Primative(ShaderPrimatives::Bool)),
+            _ => None,
+        };
+
+        if let Some(primative) = primative {
+            return Ok(primative);
+        }
+
+        let object = match ident.to_string().as_str() {
+            "vec2" => Some(ShaderType::Object(ShaderObjects::Vec2)),
+            "vec3" => Some(ShaderType::Object(ShaderObjects::Vec3)),
+            "vec4" => Some(ShaderType::Object(ShaderObjects::Vec4)),
+            "mat2" => Some(ShaderType::Object(ShaderObjects::Mat2)),
+            "mat3" => Some(ShaderType::Object(ShaderObjects::Mat3)),
+            "mat4" => Some(ShaderType::Object(ShaderObjects::Mat4)),
+            _ => None,
+        };
+
+        if let Some(object) = object {
+            return Ok(object);
+        }
+
+        for s in &self.structs {
+            if s.name == *ident.to_string() {
+                return Ok(ShaderType::Object(ShaderObjects::Custom(s.clone())));
+            }
+        }
+
+        Err(syn::Error::new(
+            ident.span(),
+            format!("Unknown type: {}", ident),
+        ))
     }
 
     pub fn get_var(&self, name: &Ident, local_vars: &[ShaderVar]) -> Option<ShaderVar> {
