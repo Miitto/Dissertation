@@ -58,7 +58,6 @@ impl Camera for PerspectiveCamera {
     }
 
     fn translate(&mut self, direction: crate::Dir, delta: f32) {
-        optick::event!("Perspective Camera Translate");
         let movement = delta * self.speed;
         let rotation = self.rotation.as_quat();
 
@@ -92,7 +91,6 @@ impl Camera for PerspectiveCamera {
     }
 
     fn rotate(&mut self, mut pitch_delta: f64, yaw_delta: f64, is_mouse: bool) {
-        optick::event!("Perspective Camera Rotate");
         if is_mouse && !self.invert_mouse {
             pitch_delta *= -1.;
         }
@@ -125,7 +123,6 @@ impl Camera for PerspectiveCamera {
     }
 
     fn handle_input(&mut self, input: &Input, delta: f32) {
-        optick::event!("Perspective Camera Handle Input");
         let scroll = input.wheel();
 
         self.mouse_sensitivity += 0.001 * scroll;

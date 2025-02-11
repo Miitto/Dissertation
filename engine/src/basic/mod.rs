@@ -54,7 +54,6 @@ impl VoxelManager {
 
 impl Renderable for VoxelManager {
     fn render(&self, state: &mut renderer::State) {
-        optick::event!("Basic Voxel Render");
         for voxel in &self.voxels {
             voxel.render(state);
         }

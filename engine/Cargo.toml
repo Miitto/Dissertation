@@ -14,14 +14,15 @@ glium = "0.36.0"
 renderer = { path = "./renderer/" }
 glam = "0.29.2"
 shaders = { path = "./shaders" }
-optick = "1.3.4"
 
 [dependencies]
 glium.workspace = true
 renderer.workspace = true
 shaders.workspace = true
 glam.workspace = true
-optick.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+optick = { default-features = false, version = "1.3.4" }
 
 [features]
 frustum = ["chunks"]

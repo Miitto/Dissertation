@@ -1150,7 +1150,6 @@ name = "shaders"
 version = "0.1.0"
 dependencies = [
  "glium",
- "optick",
  "shader_macros",
  "shaders_common",
 ]
@@ -1160,7 +1159,6 @@ name = "shaders_common"
 version = "0.1.0"
 dependencies = [
  "glium",
- "optick",
 ]
 
 [[package]]

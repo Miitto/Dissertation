@@ -58,7 +58,7 @@ impl Chunk {
                     }
 
                     for dir in Dir::all() {
-                        let pos = InstanceData::new(x as u8, y as u8, z as u8, dir);
+                        let pos = InstanceData::new(x as u8, y as u8, z as u8, dir, 1, 1);
                         data.push(chunk_voxel::Instance { data: pos.into() });
                     }
                 }

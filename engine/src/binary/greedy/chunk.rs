@@ -2,15 +2,18 @@ use std::cell::{Ref, RefCell};
 
 use renderer::Dir;
 
-use crate::{binary::common::make_culled_faces, common::InstanceData};
+use crate::{
+    binary::common::{greedy_faces, make_culled_faces},
+    common::InstanceData,
+};
 
-use super::voxel::{self, BlockType, culled_voxel};
+use super::voxel::{self, BlockType, greedy_voxel};
 
 const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
     voxels: Box<[[[voxel::Voxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    instances: RefCell<Option<Vec<culled_voxel::Instance>>>,
+    instances: RefCell<Option<Vec<greedy_voxel::Instance>>>,
 }
 
 impl Chunk {
@@ -42,7 +45,7 @@ impl Chunk {
         chunk
     }
 
-    pub fn instance_positions(&self) -> Ref<'_, Vec<culled_voxel::Instance>> {
+    pub fn instance_positions(&self) -> Ref<'_, Vec<greedy_voxel::Instance>> {
         if self.instances.borrow().is_some() {
             return Ref::map(self.instances.borrow(), |o| o.as_ref().unwrap());
         }
@@ -51,25 +54,15 @@ impl Chunk {
 
         let culled = make_culled_faces(get_fn);
 
+        let greedy = greedy_faces(culled);
+
         let mut instances = vec![];
 
         for dir in Dir::all() {
-            for x in 0..CHUNK_SIZE {
-                for y in 0..CHUNK_SIZE {
-                    for z in 0..CHUNK_SIZE {
-                        let col = culled[usize::from(dir)][z][x];
+            for face in greedy[usize::from(dir)].iter() {
+                let data = InstanceData::new(face.x, face.y, face.z, dir, face.width, face.height);
 
-                        let solid = (col >> y) & 1 == 1;
-
-                        if !solid {
-                            continue;
-                        }
-
-                        let pos =
-                            InstanceData::new(x as u8, y as u8, z as u8, dir, 1, 1).rotate_on_dir();
-                        instances.push(culled_voxel::Instance { data: pos.into() });
-                    }
-                }
+                instances.push(greedy_voxel::Instance { data: data.into() });
             }
         }
 

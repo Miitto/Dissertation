@@ -16,7 +16,7 @@ mod tests;
 const TEST: Test = Test::Cube;
 
 fn main() {
-    let name = if cfg!(feature = "binary") {
+    let _name = if cfg!(feature = "binary") {
         if cfg!(feature = "greedy") {
             println!("Running Binary greedy test");
             "binary_greedy"
@@ -38,9 +38,9 @@ fn main() {
     let mut app = App::new();
 
     let event_loop = make_event_loop();
-    optick::start_capture();
+    // optick::start_capture();
     let _ = event_loop.run_app(&mut app);
-    optick::stop_capture(name);
+    // optick::stop_capture(name);
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
@@ -127,7 +127,8 @@ impl ApplicationHandler for App {
                     if self.setup.is_none() {
                         self.setup = Some(if cfg!(feature = "binary") {
                             if cfg!(feature = "greedy") {
-                                todo!("Setup Binary greedy mesher")
+                                Box::new(binary::greedy::setup(TEST, &self.state))
+                                    as Box<dyn Renderable>
                             } else {
                                 Box::new(binary::culled::setup(TEST, &self.state))
                                     as Box<dyn Renderable>

@@ -46,7 +46,7 @@ impl State {
 
     pub fn new_frame(&mut self) {
         if let Some(display) = &self.display {
-            optick::next_frame();
+            // optick::next_frame();
             self.delta_time = self.frame_time();
             self.last_frame_time = std::time::Instant::now();
 
@@ -58,7 +58,7 @@ impl State {
     }
 
     pub fn end_frame(&mut self) {
-        optick::event!("State End Frame");
+        // optick::event!("State End Frame");
         self.input.end_frame();
 
         if let Some(target) = self.target.take() {
@@ -79,7 +79,7 @@ impl State {
         U: uniforms::Uniforms,
         V: vertex::MultiVerticesSource<'b>,
     {
-        optick::event!("Draw Call");
+        // optick::event!("Draw Call");
         self.target.as_mut().unwrap().draw(
             vertex_buffer,
             index_buffer,

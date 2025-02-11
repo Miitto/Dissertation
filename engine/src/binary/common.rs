@@ -1,12 +1,23 @@
-use renderer::Axis;
+use renderer::{Axis, Dir};
 
 const CHUNK_SIZE_P: usize = 34;
 const CHUNK_SIZE: usize = 32;
 
 type AxisDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]>;
 type FaceDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]>;
+type TransformedDepths = Box<[[[u32; CHUNK_SIZE]; CHUNK_SIZE]; 6]>;
+type GreedyFaces = Box<[Box<[GreedyFace]>; 6]>;
 
-pub fn make_culled_faces<F>(get_fn: F) -> FaceDepths
+#[derive(Debug, Default)]
+pub struct GreedyFace {
+    pub x: u8,
+    pub y: u8,
+    pub z: u8,
+    pub width: u8,
+    pub height: u8,
+}
+
+pub fn make_culled_faces<F>(get_fn: F) -> TransformedDepths
 where
     F: Fn(usize, usize, usize) -> bool,
 {
@@ -82,14 +93,14 @@ pub fn cull_depths(depths: AxisDepths) -> FaceDepths {
 }
 
 /// Transform depth from going along the integer, to the horizonal axis (X-Z) going along the integer.
-pub fn depths_to_faces(depths: FaceDepths) -> FaceDepths {
-    let mut faces = Box::new([[[0; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]);
+pub fn depths_to_faces(depths: FaceDepths) -> TransformedDepths {
+    let mut faces = Box::new([[[0; CHUNK_SIZE]; CHUNK_SIZE]; 6]);
 
-    for face in 0..6 {
+    for dir in Dir::all() {
         for z in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
                 // Cut the padding, as it's not part of the chunk
-                let mut col = depths[face][z + 1][x + 1];
+                let mut col = depths[usize::from(dir)][z + 1][x + 1];
                 col >>= 1;
                 col &= !(1 << CHUNK_SIZE);
 
@@ -102,11 +113,92 @@ pub fn depths_to_faces(depths: FaceDepths) -> FaceDepths {
                     // so we can get the next
                     col &= col - 1;
 
-                    faces[face][y][x] |= 1 << z;
+                    faces[usize::from(dir)][y][x] |= 1 << z;
                 }
             }
         }
     }
 
     faces
+}
+
+pub fn greedy_faces(mut depths: TransformedDepths) -> GreedyFaces {
+    let mut greedy = vec![vec![], vec![], vec![], vec![], vec![], vec![]];
+
+    for dir in Dir::all() {
+        let face = &mut greedy[usize::from(dir)];
+        for depth in 0..CHUNK_SIZE {
+            let faces = greedy_face(&mut depths[usize::from(dir)][depth], depth as u8);
+            face.extend(faces);
+        }
+    }
+
+    if greedy.len() != 6 {
+        panic!("Greedy faces must have 6 faces, has {}", greedy.len());
+    }
+
+    let raw = Box::into_raw(
+        greedy
+            .into_iter()
+            .map(|v| v.into_boxed_slice())
+            .collect::<Vec<Box<[GreedyFace]>>>()
+            .into_boxed_slice(),
+    );
+    unsafe { Box::from_raw(raw as *mut [Box<[GreedyFace]>; 6]) }
+}
+
+pub fn greedy_face(face: &mut [u32; CHUNK_SIZE], depth: u8) -> Box<[GreedyFace]> {
+    let mut quads = vec![];
+
+    const CS: u32 = CHUNK_SIZE as u32;
+
+    for row in 0..face.len() {
+        let line = face[row] as u64;
+        if line == 0 {
+            continue;
+        }
+        let mut y = 0u32;
+
+        while y < CS {
+            y += (face[row] >> y).trailing_zeros();
+
+            if y > CS {
+                continue;
+            }
+
+            let h = (line >> y).trailing_ones();
+
+            let h_mask = u64::checked_shl(1, h).map_or(!0, |v| v - 1);
+            let mask = h_mask << y;
+
+            let mut w = 1;
+
+            while row + w < CHUNK_SIZE {
+                let line = face[row + w] as u64;
+                let next_row = (line >> y) & h_mask;
+
+                if next_row != h_mask {
+                    break;
+                }
+
+                face[row + w] &= (!mask) as u32;
+
+                w += 1;
+            }
+
+            if w != 0 && h != 0 {
+                quads.push(GreedyFace {
+                    x: row as u8,
+                    y: y as u8,
+                    z: depth,
+                    width: w as u8 - 1,
+                    height: h as u8 - 1,
+                });
+            }
+
+            y += h;
+        }
+    }
+
+    quads.into_boxed_slice()
 }

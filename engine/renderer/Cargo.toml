@@ -6,4 +6,5 @@ edition = "2024"
 [dependencies]
 glam.workspace = true
 glium.workspace = true
-optick.workspace = true
+[target.'cfg(windows)'.dependencies]
+optick = { default-features = false, version = "1.3.4" }

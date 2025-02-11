@@ -73,7 +73,6 @@ impl Voxel {
 
 impl Renderable for Voxel {
     fn render(&self, state: &mut State) {
-        optick::event!();
         let display = if let Some(display) = &state.display {
             display
         } else {
