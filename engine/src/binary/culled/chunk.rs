@@ -1,0 +1,79 @@
+use std::cell::{Ref, RefCell};
+
+use renderer::Dir;
+
+use crate::{binary::common::make_culled_faces, common::InstanceData};
+
+use super::voxel::{self, BlockType, culled_voxel};
+
+const CHUNK_SIZE: usize = 32;
+
+pub struct Chunk {
+    voxels: Box<[[[voxel::Voxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    instances: RefCell<Option<Vec<culled_voxel::Instance>>>,
+}
+
+impl Chunk {
+    pub fn set(&mut self, pos: [usize; 3], block_type: BlockType) {
+        *self.instances.borrow_mut() = None;
+        self.voxels[pos[0]][pos[1]][pos[2]].set_type(block_type);
+    }
+
+    pub fn fill(block_type: BlockType) -> Self {
+        let voxels =
+            Box::new([[[voxel::Voxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+        Self {
+            voxels,
+            instances: RefCell::new(None),
+        }
+    }
+
+    pub fn flat(height: u8, block_type: BlockType) -> Self {
+        let mut chunk = Self::fill(BlockType::Air);
+
+        for y in 0..height {
+            for x in 0..CHUNK_SIZE {
+                for z in 0..CHUNK_SIZE {
+                    chunk.voxels[x][y as usize][z] = voxel::Voxel::new(block_type);
+                }
+            }
+        }
+
+        chunk
+    }
+
+    pub fn instance_positions(&self) -> Ref<'_, Vec<culled_voxel::Instance>> {
+        if self.instances.borrow().is_some() {
+            return Ref::map(self.instances.borrow(), |o| o.as_ref().unwrap());
+        }
+
+        let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].is_solid();
+
+        let culled = make_culled_faces(get_fn);
+
+        let mut instances = vec![];
+
+        for dir in Dir::all() {
+            for x in 0..CHUNK_SIZE {
+                for y in 0..CHUNK_SIZE {
+                    for z in 0..CHUNK_SIZE {
+                        let col = culled[usize::from(dir)][z][x];
+
+                        let solid = (col >> y) & 1 == 1;
+
+                        if !solid {
+                            continue;
+                        }
+
+                        let pos = InstanceData::new(x as u8, y as u8, z as u8, dir).rotate_on_dir();
+                        instances.push(culled_voxel::Instance { data: pos.into() });
+                    }
+                }
+            }
+        }
+
+        *self.instances.borrow_mut() = Some(instances);
+
+        self.instance_positions()
+    }
+}

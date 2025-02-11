@@ -8,13 +8,26 @@ use renderer::{Renderable, State, make_event_loop, make_window};
 use tests::Test;
 
 mod basic;
+mod binary;
 mod chunks;
+mod common;
 mod tests;
 
 const TEST: Test = Test::Cube;
 
 fn main() {
-    let name = if cfg!(feature = "chunks") {
+    let name = if cfg!(feature = "binary") {
+        if cfg!(feature = "greedy") {
+            println!("Running Binary greedy test");
+            "binary_greedy"
+        } else {
+            println!("Running Binary culled test");
+            "binary_culled"
+        }
+    } else if cfg!(feature = "culled") {
+        println!("Running culled test");
+        "culled"
+    } else if cfg!(feature = "chunks") {
         println!("Running chunks test");
         "chunks"
     } else {
@@ -112,7 +125,14 @@ impl ApplicationHandler for App {
                     self.state.new_frame();
 
                     if self.setup.is_none() {
-                        self.setup = Some(if cfg!(feature = "chunks") {
+                        self.setup = Some(if cfg!(feature = "binary") {
+                            if cfg!(feature = "greedy") {
+                                todo!("Setup Binary greedy mesher")
+                            } else {
+                                Box::new(binary::culled::setup(TEST, &self.state))
+                                    as Box<dyn Renderable>
+                            }
+                        } else if cfg!(feature = "chunks") {
                             Box::new(chunks::setup(TEST, &self.state)) as Box<dyn Renderable>
                         } else {
                             Box::new(basic::setup(TEST)) as Box<dyn Renderable>

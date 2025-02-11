@@ -24,6 +24,8 @@ glam.workspace = true
 optick.workspace = true
 
 [features]
-default = ["chunks"]
 frustum = ["chunks"]
 chunks = []
+binary = []
+culled = []
+greedy = ["binary"]
