@@ -1,55 +1,48 @@
-use quote::format_ident;
-use syn::Ident;
+use proc_macro::{Diagnostic, Ident, Level, TokenTree};
+
+use crate::parse::{punct, uint};
+
+use super::ident_any;
+
+use crate::Result;
 
 #[derive(Debug)]
 pub struct ProgramMeta {
     pub name: Ident,
-    pub version: i32,
+    pub version: u32,
 }
 
-impl ProgramMeta {
-    pub fn ident(&self) -> proc_macro2::Ident {
-        format_ident!("Program")
+#[expect(clippy::while_let_loop)]
+pub fn parse_meta(input: &[TokenTree]) -> Result<&[TokenTree], ProgramMeta, Diagnostic> {
+    let (input, name) = ident_any(input)
+        .map_err(|_| Diagnostic::spanned(input[0].span(), Level::Error, "Expected Shader name"))?;
+    let (mut input, _) = punct(',')(input)
+        .map_err(|_| Diagnostic::spanned(input[0].span(), Level::Error, "Expected ,"))?;
+
+    let mut version = 460;
+
+    fn parse_version(input: &[TokenTree]) -> Result<&[TokenTree], u32> {
+        let (input, _) = ident_any(input)?;
+        let (input, _) = punct('=')(input)?;
+        let (input, v) = uint(input)?;
+
+        Ok((input, v))
     }
 
-    pub fn vertex_ident(&self) -> proc_macro2::Ident {
-        format_ident!("Vertex")
-    }
-
-    pub fn uniforms_ident(&self) -> proc_macro2::Ident {
-        format_ident!("Uniforms")
-    }
-}
-
-impl syn::parse::Parse for ProgramMeta {
-    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
-        let name = input.parse::<syn::Ident>()?;
-        input.parse::<syn::Token![,]>()?;
-
-        let mut version = None;
-
-        while input.peek(syn::Ident) {
-            let attr = input.parse::<syn::Ident>()?;
-            input.parse::<syn::Token![=]>()?;
-            match attr.to_string().as_str() {
-                "version" | "v" => {
-                    let v = input.parse::<syn::LitInt>()?;
-                    version = Some(v.base10_parse::<i32>().unwrap());
-                }
-                _ => {
-                    return Err(syn::Error::new(
-                        attr.span(),
-                        format!("Unknown attribute: {}", attr),
-                    ));
-                }
-            }
+    loop {
+        if let Ok((rest, v)) = parse_version(input) {
+            input = rest;
+            version = v;
+        } else {
+            break;
         }
-
-        let meta = ProgramMeta {
-            name,
-            version: version.unwrap_or(460),
-        };
-
-        Ok(meta)
     }
+
+    Ok((
+        input,
+        ProgramMeta {
+            name: name.clone(),
+            version,
+        },
+    ))
 }

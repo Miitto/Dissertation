@@ -1,24 +1,17 @@
-use proc_macro2::Span;
-use syn::{Ident, parse::ParseStream};
+use proc_macro::{Diagnostic, Ident, Level, Span};
 
 use crate::shader_var::{
-    ShaderFunction, ShaderObjects, ShaderPrimatives, ShaderStruct, ShaderType, ShaderVar,
+    ShaderFunction, ShaderObjects, ShaderPrimatives, ShaderStruct, ShaderType, ShaderVar, Uniform,
 };
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ShaderInfo {
     pub structs: Vec<ShaderStruct>,
     pub functions: Vec<ShaderFunction>,
-    pub uniforms: Vec<ShaderVar>,
+    pub uniforms: Vec<Uniform>,
     pub vertex_fn: Option<ShaderFunction>,
     pub frag_fn: Option<ShaderFunction>,
     pub geometry_fn: Option<ShaderFunction>,
-}
-
-impl syn::parse::Parse for ShaderInfo {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        crate::parse::glsl::parse_glsl(input)
-    }
 }
 
 impl ShaderInfo {
@@ -27,7 +20,7 @@ impl ShaderInfo {
         ident: &Ident,
         local_vars: &[ShaderVar],
         use_vars: bool,
-    ) -> syn::Result<ShaderType> {
+    ) -> Result<ShaderType, Diagnostic> {
         if use_vars {
             if let Some(var) = self.get_var(ident, local_vars) {
                 return Ok(var.t);
@@ -62,26 +55,27 @@ impl ShaderInfo {
         }
 
         for s in &self.structs {
-            if s.name == *ident.to_string() {
+            if s.name.to_string() == *ident.to_string() {
                 return Ok(ShaderType::Object(ShaderObjects::Custom(s.clone())));
             }
         }
 
-        Err(syn::Error::new(
+        Err(Diagnostic::spanned(
             ident.span(),
+            Level::Error,
             format!("Unknown type: {}", ident),
         ))
     }
 
     pub fn get_var(&self, name: &Ident, local_vars: &[ShaderVar]) -> Option<ShaderVar> {
         let name = name.to_string();
-        if let Some(var) = local_vars.iter().find(|v| v.name == name) {
+        if let Some(var) = local_vars.iter().find(|v| v.name.to_string() == name) {
             return Some(var.clone());
         }
 
         for uniform in &self.uniforms {
-            if uniform.name == name {
-                return Some(uniform.clone());
+            if uniform.var.name.to_string() == name {
+                return Some(uniform.var.clone());
             }
         }
 
@@ -89,9 +83,8 @@ impl ShaderInfo {
         if let Some(name) = name.strip_prefix("gl_") {
             return Some(match name {
                 "Position" => ShaderVar {
-                    name: "gl_Position".to_string(),
+                    name: Ident::new("gl_Position", Span::call_site()),
                     t: ShaderType::Object(ShaderObjects::Vec4),
-                    name_span: Span::call_site(),
                     type_span: None,
                 },
                 _ => {

@@ -1,19 +1,11 @@
 #![feature(proc_macro_diagnostic, proc_macro_span)]
-use std::{fs::OpenOptions, io::Write};
-
-use parse::meta::ProgramMeta;
-use proc_macro::TokenStream;
-use quote::quote;
+use parse::{Delimited, delimited, meta::ProgramMeta};
+use proc_macro::{Delimiter, Diagnostic, Level, TokenStream};
+use quote::{format_ident, quote};
 use shader_info::ShaderInfo;
-use syn::{
-    braced,
-    parse::{ParseBuffer, ParseStream},
-    parse_macro_input,
-};
 
 mod build_glsl;
 mod build_rust;
-mod errors;
 mod parse;
 mod shader_info;
 mod shader_var;
@@ -23,24 +15,47 @@ struct ProgramInput {
     content: ShaderInfo,
 }
 
-impl syn::parse::Parse for ProgramInput {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        let meta = input.parse()?;
-        let content: ParseBuffer;
-        _ = braced!(content in input);
+type Result<I, C, E = ()> = core::result::Result<(I, C), E>;
 
-        let info = content.parse()?;
-
-        Ok(Self {
-            meta,
-            content: info,
-        })
-    }
+fn abandon(name: proc_macro2::Ident) -> TokenStream {
+    quote! {pub mod #name {} pub struct Instance; pub struct Vertex; pub struct Program;}.into()
 }
 
 #[proc_macro]
 pub fn program(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as ProgramInput);
+    let collected: Vec<proc_macro::TokenTree> = input.into_iter().collect();
+
+    let (content, meta) = match parse::meta::parse_meta(&collected) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            e.emit();
+
+            return quote! {}.into();
+        }
+    };
+
+    let name = format_ident!("{}", meta.name.to_string());
+
+    let (_, Delimited { content, .. }) = if let Ok(content) = delimited(Delimiter::Brace)(content) {
+        content
+    } else {
+        Diagnostic::spanned(content[0].span(), Level::Error, "Expected block").emit();
+        return abandon(name);
+    };
+
+    let (_, info) = match parse::glsl::parse_glsl(&content) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            e.emit();
+
+            return abandon(name);
+        }
+    };
+
+    let input = ProgramInput {
+        meta,
+        content: info,
+    };
 
     let vertex_shader = build_glsl::vertex_shader(&input);
     let fragment_shader = build_glsl::fragment_shader(&input);
@@ -52,7 +67,7 @@ pub fn program(input: TokenStream) -> TokenStream {
     let program_impl =
         build_rust::program(&vertex_shader, &fragment_shader, geometry_shader.as_ref());
 
-    let name = input.meta.name;
+    let name = format_ident!("{}", input.meta.name.to_string());
 
     let expanded = quote! {
         pub mod #name {

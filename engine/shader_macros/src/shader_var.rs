@@ -1,27 +1,14 @@
 use std::fmt::Display;
 
-use proc_macro2::Span;
-use quote::{ToTokens, quote};
-use syn::Ident;
+use proc_macro::{Ident, Span};
+use quote::{ToTokens, format_ident, quote};
 
 #[derive(Clone, Debug)]
 #[expect(dead_code)]
 pub struct ShaderVar {
-    pub name: String,
+    pub name: Ident,
     pub t: ShaderType,
-    pub name_span: Span,
     pub type_span: Option<Span>,
-}
-
-impl ShaderVar {
-    pub fn new(t: ShaderType, type_span: Option<Span>, name: String, name_span: Span) -> Self {
-        Self {
-            name,
-            t,
-            type_span,
-            name_span,
-        }
-    }
 }
 
 impl Display for ShaderVar {
@@ -32,24 +19,29 @@ impl Display for ShaderVar {
 
 impl ToTokens for ShaderVar {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        let name = &self.name;
+        let name: proc_macro2::Ident = format_ident!("{}", self.name.to_string());
         let t = &self.t;
         tokens.extend(quote! {#t #name});
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct Uniform {
+    pub var: ShaderVar,
+    pub value: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderType {
     Primative(ShaderPrimatives),
     Object(ShaderObjects),
-    Unknown(String),
 }
 
+#[allow(dead_code)]
 impl ShaderType {
     pub fn get_member(&self, name: &Ident) -> Option<ShaderType> {
         match self {
             Self::Primative(_) => None,
-            Self::Unknown(_) => None,
             Self::Object(o) => o.get_member(name),
         }
     }
@@ -60,7 +52,6 @@ impl Display for ShaderType {
         match self {
             ShaderType::Primative(p) => write!(f, "{}", p),
             ShaderType::Object(o) => write!(f, "{}", o),
-            ShaderType::Unknown(s) => write!(f, "{}", s),
         }
     }
 }
@@ -70,7 +61,6 @@ impl ToTokens for ShaderType {
         match self {
             ShaderType::Primative(p) => p.to_tokens(tokens),
             ShaderType::Object(o) => o.to_tokens(tokens),
-            ShaderType::Unknown(s) => s.to_tokens(tokens),
         }
     }
 }
@@ -223,6 +213,7 @@ pub enum ShaderObjects {
     Custom(ShaderStruct),
 }
 
+#[allow(dead_code)]
 impl ShaderObjects {
     fn vec_swizzle(len: usize, name: &str) -> Option<ShaderType> {
         let mut chars = vec!['x', 'r'];
@@ -264,7 +255,7 @@ impl ShaderObjects {
             Self::Vec4 => Self::vec_swizzle(4, name),
             // TODO: Matricies
             Self::Custom(s) => s.fields.iter().find_map(|f| {
-                if f.name == name {
+                if f.name.to_string() == *name {
                     Some(f.t.clone())
                 } else {
                     None
@@ -314,7 +305,7 @@ pub(crate) struct ShaderStruct {
 
 impl PartialEq for ShaderStruct {
     fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
+        self.name.to_string() == other.name.to_string()
     }
 }
 
@@ -335,8 +326,7 @@ impl Display for ShaderStruct {
 
 #[derive(Clone, Debug)]
 pub(crate) struct ShaderFunction {
-    pub return_type: ShaderType,
-    pub name: String,
+    pub var: ShaderVar,
     pub params: Vec<ShaderVar>,
     pub content: String,
 }
@@ -353,7 +343,7 @@ impl Display for ShaderFunction {
         write!(
             f,
             "{} {}({}) {{\n{}\n}}",
-            self.return_type, self.name, params, self.content
+            self.var.t, self.var.name, params, self.content
         )
     }
 }

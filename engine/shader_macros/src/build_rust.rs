@@ -23,7 +23,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
             .fields
             .iter()
             .map(|f| {
-                let name = format_ident!("{}", f.name);
+                let name = format_ident!("{}", f.name.to_string());
                 let ty = &f.t;
                 quote! {
                     #name: #ty
@@ -33,7 +33,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
         let names = vertex_input
             .fields
             .iter()
-            .map(|f| format_ident!("{}", f.name))
+            .map(|f| format_ident!("{}", f.name.to_string()))
             .collect();
 
         (fields, names)
@@ -52,7 +52,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
                 .fields
                 .iter()
                 .map(|f| {
-                    let name = format_ident!("{}", f.name);
+                    let name = format_ident!("{}", f.name.to_string());
                     let ty = &f.t;
                     quote! {
                         #name: #ty
@@ -63,7 +63,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
             let names: Vec<Ident> = vertex_input
                 .fields
                 .iter()
-                .map(|f| format_ident!("{}", f.name))
+                .map(|f| format_ident!("{}", f.name.to_string()))
                 .collect();
 
             quote! {
@@ -97,10 +97,16 @@ pub fn uniform_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
         .uniforms
         .iter()
         .map(|uniform| {
-            let name = format_ident!("{}", uniform.name);
-            let ty = &uniform.t;
-            quote! {
-                #name: #ty
+            let name = format_ident!("{}", uniform.var.name.to_string());
+            let ty = &uniform.var.t;
+            if uniform.value.is_some() {
+                quote! {
+                #name: Option<#ty>
+                }
+            } else {
+                quote! {
+                    #name: #ty
+                }
             }
         })
         .collect();

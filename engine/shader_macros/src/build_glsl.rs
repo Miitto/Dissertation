@@ -1,3 +1,5 @@
+use proc_macro::{Diagnostic, Level};
+
 use crate::{
     ProgramInput, ShaderInfo,
     shader_var::{ShaderObjects, ShaderType},
@@ -6,7 +8,17 @@ use crate::{
 fn get_uniforms(info: &ShaderInfo) -> String {
     info.uniforms
         .iter()
-        .map(|uniform| format!("uniform {} {};", uniform.t, uniform.name))
+        .map(|uniform| {
+            let default_value = if let Some(v) = uniform.value.as_ref() {
+                format!(" = {}", v)
+            } else {
+                "".to_string()
+            };
+            format!(
+                "uniform {} {}{};",
+                uniform.var.t, uniform.var.name, default_value
+            )
+        })
         .collect::<Vec<String>>()
         .join("\n")
 }
@@ -39,7 +51,16 @@ pub fn vertex_shader(
 
     let functions = get_functions(info);
 
-    let vertex_fn = info.vertex_fn.as_ref().expect("No vertex function found");
+    let vertex_fn = if let Some(vertex_fn) = info.vertex_fn.as_ref() {
+        vertex_fn
+    } else {
+        Diagnostic::new(
+            Level::Error,
+            "No vertex function found when building vertex shader",
+        )
+        .emit();
+        return "".to_string();
+    };
 
     let vertex_input = match &vertex_fn.params[0].t {
         ShaderType::Object(ShaderObjects::Custom(s)) => s,
@@ -105,7 +126,7 @@ pub fn vertex_shader(
         (String::default(), String::default())
     };
 
-    let vertex_out_struct = match &vertex_fn.return_type {
+    let vertex_out_struct = match &vertex_fn.var.t {
         ShaderType::Object(ShaderObjects::Custom(s)) => s,
         _ => {
             panic!("Fragment function must take a struct as input");
@@ -163,8 +184,8 @@ void main() {{
     {}
 }}"#,
         meta.version,
-        vertex_fn.return_type,
-        vertex_fn.name,
+        vertex_fn.var.t,
+        vertex_fn.var.name,
         main_instance_param,
         struct_to_out_assign
     );
@@ -184,7 +205,16 @@ pub fn fragment_shader(
 
     let functions = get_functions(info);
 
-    let frag_fn = info.frag_fn.as_ref().expect("No vertex function found");
+    let frag_fn = if let Some(frag_fn) = info.frag_fn.as_ref() {
+        frag_fn
+    } else {
+        Diagnostic::new(
+            Level::Error,
+            "No fragment function found when building fragment shader",
+        )
+        .emit();
+        return "".to_string();
+    };
 
     let frag_input = match &frag_fn.params[0].t {
         ShaderType::Object(ShaderObjects::Custom(s)) => s,
@@ -214,7 +244,7 @@ pub fn fragment_shader(
 
     let in_to_struct = format!("{} frag_input;\n{}", frag_input.name, in_to_struct_assign);
 
-    let out_var_type = frag_fn.return_type.to_string();
+    let out_var_type = frag_fn.var.t.to_string();
 
     let content = format!(
         r#"#version {}
@@ -244,7 +274,7 @@ void main() {{
     // Out
     frag_output = {}(frag_input);
 }}"#,
-        meta.version, frag_fn.name
+        meta.version, frag_fn.var.name
     );
 
     content
@@ -288,7 +318,7 @@ pub fn geometry_shader(
 
         let in_to_struct = format!("{} geom_input;\n{}", geom_input.name, in_to_struct_assign);
 
-        let geom_out_struct = match &geom_fn.return_type {
+        let geom_out_struct = match &geom_fn.var.t {
             ShaderType::Object(ShaderObjects::Custom(s)) => s,
             _ => {
                 panic!("Fragment function must take a struct as input");
@@ -343,7 +373,7 @@ void main() {{
     {} geom_output = {}(input);
     {}
 }}"#,
-            meta.version, geom_fn.return_type, geom_fn.name, struct_to_out_assign
+            meta.version, geom_fn.var.t, geom_fn.var.name, struct_to_out_assign
         );
 
         content
