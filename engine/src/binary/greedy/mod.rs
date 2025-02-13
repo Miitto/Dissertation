@@ -22,7 +22,8 @@ pub fn setup(test: Test, state: &State) -> ChunkManager {
             manager.chunks.insert([0, 0, 0], chunk);
         }
         Test::Cube => {
-            let chunk = Chunk::fill(BlockType::Grass);
+            let mut chunk = Chunk::fill(BlockType::Grass);
+            chunk.set([0, 0, 1], BlockType::Air);
             manager.chunks.insert([0, 0, 0], chunk);
         }
         Test::Plane(radius, height) => {
@@ -73,8 +74,8 @@ impl ChunkManager {
                 write: true,
                 ..Default::default()
             },
-            backface_culling: glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
-            polygon_mode: glium::draw_parameters::PolygonMode::Line,
+            //backface_culling: glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
+            //polygon_mode: glium::draw_parameters::PolygonMode::Line,
             ..Default::default()
         };
 
@@ -108,6 +109,8 @@ impl Renderable for ChunkManager {
                 modelMatrix: model_matrix.to_cols_array_2d(),
                 viewMatrix: state.camera.get_view().to_cols_array_2d(),
                 projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
+                sky_light_color: None,
+                sky_light_direction: None,
             };
 
             let uniforms = uniform! {

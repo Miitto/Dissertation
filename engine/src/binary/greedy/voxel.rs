@@ -37,6 +37,8 @@ shaders::program!(greedy_voxel, {
     uniform mat4 viewMatrix;
     uniform mat4 modelMatrix;
 
+    #include "shaders/lighting.glsl"
+
     struct vIn {
         vec3 v_pos;
     }
@@ -68,8 +70,8 @@ shaders::program!(greedy_voxel, {
         uint width = (i.data >> 18) & 31;
         uint height = (i.data >> 23) & 31;
 
-        v_x *= float(width + 1);
-        v_y *= float(height + 1);
+        float w = float(width + 1);
+        float h = float(height + 1);
 
         float x;
         float y;
@@ -77,45 +79,49 @@ shaders::program!(greedy_voxel, {
 
         // left right up down forward back
         switch (direction) {
+            // Left
             case 0: {
                 x = 0;
-                y = 1-v_x;
-                z = v_z;
+                y = (1-v_x) * h;
+                z = v_z * w;
+                // Magenta
                 o.color = vec4(1.0, 0.0, 1.0, 1.0);
                 break;
             }
+            // Right
             case 1: {
                 x = 1;
-                y = v_x;
-                z = v_z;
+                y = v_x * h;
+                z = v_z * w;
+                // Cyan
                 o.color = vec4(0.0, 1.0, 1.0, 1.0);
                 break;
             }
             case 2: {
-                x = v_x;
+                x = v_x * w;
                 y = 0;
-                z = v_z;
+                z = v_z * h;
                 o.color = vec4(1.0, 0.0, 0.0, 1.0);
                 break;
             }
             case 3: {
-                x = 1-v_x;
+                x = (1-v_x) * w;
                 y = 1;
-                z = v_z;
+                z = v_z * h;
                 o.color = vec4(1.0, 1.0, 0.0, 1.0);
                 break;
             }
             case 4: {
-                z = 1;
-                x = v_x;
-                y = v_z;
+                z = 0;
+                x = (1-v_x) * w;
+                y = (1-v_z) * h;
                 o.color = vec4(0.0, 1.0, 0.0, 1.0);
                 break;
             }
             case 5: {
-                z = 0;
-                x = 1-v_x;
-                y = v_z;
+                z = 1;
+                x = v_x * w;
+                y = (1-v_z) * h;
                 o.color = vec4(0.0, 0.0, 1.0, 1.0);
                 break;
             }

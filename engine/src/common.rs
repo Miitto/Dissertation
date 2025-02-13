@@ -9,7 +9,7 @@ impl InstanceData {
             panic!("Invalid position: ({}, {}, {})", x, y, z);
         }
 
-        if width > 32 || height > 32 {
+        if width >= 32 || height >= 32 {
             panic!("Invalid width or height: ({}, {})", width, height);
         }
 
@@ -22,14 +22,14 @@ impl InstanceData {
         let width = width as u32;
         let height = height as u32;
 
-        let x_mask = (x << 10) & 0b11111;
-        let y_mask = (y << 5) & 0b11111;
-        let z_mask = (z) & 0b11111;
+        let x_mask = (x & 0b11111) << 10;
+        let y_mask = (y & 0b11111) << 5;
+        let z_mask = z & 0b11111;
 
-        let d_mask = (d << 15) & 0b111;
+        let d_mask = (d & 0b111) << 15;
 
-        let w_mask = (width << 18) & 0b11111;
-        let h_mask = (height << 23) & 0b11111;
+        let w_mask = (width & 0b11111) << 18;
+        let h_mask = (height & 0b11111) << 23;
 
         Self(x_mask | y_mask | z_mask | d_mask | w_mask | h_mask)
     }
@@ -72,7 +72,7 @@ impl InstanceData {
 
         match dir {
             Dir::Up | Dir::Down => Self::new(x, z, y, dir, width, height),
-            Dir::Forward | Dir::Backward => Self::new(y, x, 31 - z, dir, width, height),
+            Dir::Forward | Dir::Backward => Self::new(y, x, z, dir, width, height),
             Dir::Left | Dir::Right => Self::new(z, y, x, dir, width, height),
         }
     }

@@ -100,14 +100,14 @@ shaders::program!(culled_voxel, {
                 break;
             }
             case 4: {
-                z = 1;
+                z = 0;
                 x = v_x;
                 y = v_z;
                 o.color = vec4(0.0, 1.0, 0.0, 1.0);
                 break;
             }
             case 5: {
-                z = 0;
+                z = 1;
                 x = 1-v_x;
                 y = v_z;
                 o.color = vec4(0.0, 0.0, 1.0, 1.0);

@@ -60,7 +60,8 @@ impl Chunk {
 
         for dir in Dir::all() {
             for face in greedy[usize::from(dir)].iter() {
-                let data = InstanceData::new(face.x, face.y, face.z, dir, face.width, face.height);
+                let data = InstanceData::new(face.x, face.y, face.z, dir, face.width, face.height)
+                    .rotate_on_dir();
 
                 instances.push(greedy_voxel::Instance { data: data.into() });
             }
