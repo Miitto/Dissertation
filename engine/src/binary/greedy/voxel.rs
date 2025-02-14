@@ -77,6 +77,8 @@ shaders::program!(greedy_voxel, {
         float y;
         float z;
 
+        vec3 normal = vec3(0.0, 0.0, 0.0);
+
         // left right up down forward back
         switch (direction) {
             // Left
@@ -86,6 +88,8 @@ shaders::program!(greedy_voxel, {
                 z = v_z * w;
                 // Magenta
                 o.color = vec4(1.0, 0.0, 1.0, 1.0);
+
+                normal.x = -1.0;
                 break;
             }
             // Right
@@ -95,34 +99,48 @@ shaders::program!(greedy_voxel, {
                 z = v_z * w;
                 // Cyan
                 o.color = vec4(0.0, 1.0, 1.0, 1.0);
+
+                normal.x = 1.0;
                 break;
             }
+            // Up
             case 2: {
                 x = v_x * w;
                 y = 0;
                 z = v_z * h;
                 o.color = vec4(1.0, 0.0, 0.0, 1.0);
+
+                normal.y = 1.0;
                 break;
             }
+            // Down
             case 3: {
                 x = (1-v_x) * w;
                 y = 1;
                 z = v_z * h;
                 o.color = vec4(1.0, 1.0, 0.0, 1.0);
+
+                normal.y = -1.0;
                 break;
             }
+            // Forward
             case 4: {
                 z = 0;
                 x = (1-v_x) * w;
                 y = (1-v_z) * h;
                 o.color = vec4(0.0, 1.0, 0.0, 1.0);
+
+                normal.z = -1.0;
                 break;
             }
+            // Backward
             case 5: {
                 z = 1;
                 x = v_x * w;
                 y = (1-v_z) * h;
                 o.color = vec4(0.0, 0.0, 1.0, 1.0);
+
+                normal.z = 1.0;
                 break;
             }
         }
@@ -131,8 +149,13 @@ shaders::program!(greedy_voxel, {
         float o_y = y + in_y;
         float o_z = z + in_z;
 
-        gl_Position = mvp * vec4(o_x, o_y, o_z, 1.0);
+        vec3 position = vec3(o_x, o_y, o_z);
 
+        vec4 color = apply_sky_lighting(o.color, normal, position);
+
+        o.color = color;
+
+        gl_Position = mvp * vec4(position, 1.0);
 
         return o;
     }

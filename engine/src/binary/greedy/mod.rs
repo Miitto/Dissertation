@@ -111,6 +111,7 @@ impl Renderable for ChunkManager {
                 projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
                 sky_light_color: None,
                 sky_light_direction: None,
+                ambient_light: None,
             };
 
             let uniforms = uniform! {
