@@ -180,25 +180,21 @@ impl ToTokens for ShaderPrimatives {
             ShaderPrimatives::Bool => tokens.extend(quote! {bool}),
             ShaderPrimatives::Int => tokens.extend(quote! {i32}),
             ShaderPrimatives::UInt => tokens.extend(quote! {u32}),
-            ShaderPrimatives::Float => tokens.extend(quote! {float}),
-            ShaderPrimatives::Double => tokens.extend(quote! {double}),
+            ShaderPrimatives::Float => tokens.extend(quote! {f32}),
+            ShaderPrimatives::Double => tokens.extend(quote! {f64}),
         }
     }
 }
 
 impl Display for ShaderPrimatives {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ShaderPrimatives::Bool => "bool",
-                ShaderPrimatives::Int => "int",
-                ShaderPrimatives::UInt => "uint",
-                ShaderPrimatives::Float => "float",
-                ShaderPrimatives::Double => "double",
-            }
-        )
+        write!(f, "{}", match self {
+            ShaderPrimatives::Bool => "bool",
+            ShaderPrimatives::Int => "int",
+            ShaderPrimatives::UInt => "uint",
+            ShaderPrimatives::Float => "float",
+            ShaderPrimatives::Double => "double",
+        })
     }
 }
 
