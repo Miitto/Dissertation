@@ -12,6 +12,7 @@ pub(crate) struct ShaderInfo {
     pub vertex_fn: Option<ShaderFunction>,
     pub frag_fn: Option<ShaderFunction>,
     pub geometry_fn: Option<ShaderFunction>,
+    pub includes: Vec<String>,
 }
 
 impl ShaderInfo {

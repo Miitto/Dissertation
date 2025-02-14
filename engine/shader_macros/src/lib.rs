@@ -69,8 +69,12 @@ pub fn program(input: TokenStream) -> TokenStream {
 
     let name = format_ident!("{}", input.meta.name.to_string());
 
+    let includes = input.content.includes;
+
     let expanded = quote! {
         pub mod #name {
+        #(const _: &str = include_str!(#includes);)*
+
         #vertex_struct
 
         #uniform_struct

@@ -122,6 +122,9 @@ fn parse_preprocessor<'a>(
                 }
                 path = std::path::absolute(parent.join(path)).expect("Failed to get absolute path");
             }
+
+            info.includes.push(path.to_string_lossy().to_string());
+
             let include_input = std::fs::read_to_string(path).expect("Failed to read file");
             let token_stream2: proc_macro2::TokenStream =
                 syn::parse_str(&include_input).expect("Failed to parse included file");
