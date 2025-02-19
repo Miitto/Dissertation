@@ -1,0 +1,14 @@
+@media print {
+    body {
+        --font-text-size: 11pt !important;
+        font-size: 11pt !important;
+    }
+
+    .print .markdown-preview-view {
+        -webkit-print-color-adjust: exact;
+        h1, h2, h3, h4, h5, h6, i, em {
+            color: black !important;
+        }
+
+    }
+}

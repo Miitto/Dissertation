@@ -3,5 +3,8 @@
   "interfaceFontFamily": "Mona Sans",
   "textFontFamily": "Monaspace Neon",
   "monospaceFontFamily": "Monaspace Neon Var",
-  "enabledCssSnippets": []
+  "enabledCssSnippets": [
+    "export"
+  ],
+  "baseFontSize": 15
 }
