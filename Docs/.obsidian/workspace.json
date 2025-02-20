@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "Draft.md",
+                "file": "Sources.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "Draft"
+              "title": "Sources"
             }
           },
           {
@@ -35,7 +35,8 @@
               "title": "Draft"
             }
           }
-        ]
+        ],
+        "currentTab": 1
       }
     ],
     "direction": "vertical"
@@ -171,8 +172,8 @@
             "state": {
               "type": "git-view",
               "state": {},
-              "icon": "lucide-file",
-              "title": "Plugin no longer active"
+              "icon": "git-pull-request",
+              "title": "Source Control"
             }
           }
         ]
@@ -193,10 +194,11 @@
       "obsidian-git:Open Git source control": false
     }
   },
-  "active": "f941fdc6c0bbe817",
+  "active": "5b26c671b89c9a89",
   "lastOpenFiles": [
+    "exports/Draft.pdf",
     "Sources.md",
-    "Draft.md",
+    "Context.md",
     "Proposal",
     "Welcome.md"
   ]

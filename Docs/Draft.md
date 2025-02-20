@@ -1,5 +1,3 @@
-<!-- markdownlint-configure-file { "MD013": false } -->
-
 # Optimizations for a voxel engine
 
 ## Introduction
@@ -10,22 +8,23 @@ Voxels are a different approach that allows for depth to be expressed dynamicall
 
 ### Problem
 Due to the nature of voxels, the stored voxel data needs to be transformed into something that can be rendered to the screen.
-There are two main approaches to this: meshing and raycasting. Meshing involves transforming the voxel data into a triangle mesh akin to a standard rendering approach. This approach has a simple starting point but is extremely slow if not optimized. Additionally the mesh needs to be rebuilt every time the voxel data is modified which incurs further performance penalties at runtime.
-Raycasting is a significantly more complex process that poses its own challenges beyond the initial complexity of the raycasting itself for example sending the voxel data to the GPU efficiently.
+There are two main approaches to this: meshing and raycasting. Meshing involves transforming the voxel data into a triangle mesh akin to a standard rendering approach. This approach has a simple yet inefficient starting point. Additionally the rasterization will need to be recalculated whenever the voxel data changes.
+Raycasting is a significantly more complex process that poses its own challenges, for example sending the voxel data to the GPU efficiently.
 
 ### Rationale
 This project aims to show different techniques to optimize a voxel engine by comparing them to highlight where each optimization excels and any pitfalls they present.
-I will start with a basic implementation of a meshed voxel engine that draws a single cube for every voxel, then proceed to optimize it step by step. Each optimization should not decrease visual quality so each optimization will need to be compatible with lighting techniques such as shadow mapping and ambient occlusion.
-These constraints should result in implementations which can be expanded upon to allow more advanced visual effects. The optimizations will be focused on the voxel engine itself, or on how traditional optimizations can be adapted or improved for use with a voxel engine.
+I will start with a basic implementation of a meshed voxel engine that draws a single cube for every voxel, then proceed to optimize it step by step. Each optimization should be compatible with lighting techniques such as shadow mapping and ambient occlusion to ensure that it will not reduce visual quality.
+These constraints should result in implementations which can be expanded upon to allow advanced visual effects. The optimizations will be focused on voxels, or on how traditional optimizations can be adapted or improved for use with a voxel engine.
+I will use OpenGL for this project as it allows for lower level control of the underlying code that would be occluded when using an engine such as Unity.
 
 ## Key Background Sources
 
-| Resource                                                                                                           | Description                                                                                                                                                                                                                           | Reason                                                                                                                                                                                                                                                                                                                                                                                     |
-| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Advanced graphics programming using OpenGL [1]                                                                     | This book covers a wide variety of graphics concepts with sample implementations in OpenGL. The book is aimed at people who have a basic understanding of OpenGL and wish to expand their knowledge base.                             | This book forms a basis for the core render pipeline and the generic lighting implementation used to ensure that an optimization does not prevent the use of lighting techniques.                                                                                                                                                                                                          |
-| Interactive indirect illumination using voxel cone tracing [2]                                                     | This paper covers using cone tracing to simulate global illumination and ambient occlusion through voxelizing the scene and then using a cone tracing algorithm on the created sparse voxel octree to calculate lighting information. | This paper shows a method for cone tracing using a sparse voxel octree. Since I am already working with voxels, the rasterization steps to build the sparse voxel octree are not applicable. However the rest of the paper can be applied to my needs. This will form a basis for advanced lighting used to ensure optimizations do not interfere with more advanced graphical techniques. |
-| Efficient sparse voxel octrees [3] and Efficient sparse voxel octrees–analysis, extensions, and implementation [4] | These papers cover an implementation of sparse voxel octrees which is used for a raycasting based renderer for voxels.                                                                                                                | These two papers cover the theory that can be used for storing voxels for a raycasted rendering approach and cone traced lighting.                                                                                                                                                                                                                                                         |
-| Greedy Meshing Voxels Fast [5]                                                                                     | This talk focuses on a method of creating a mesh from voxel data through binary greedy meshing.                                                                                                                                       | This talk forms the basis for an implementation of the binary greedy meshing algorithm. A subset of this is used for a binary culled mesher as a standalone optimization.                                                                                                                                                                                                                  |
+| Resource                                                                                                           | Description                                                                                                                                                                                                                           | Reason                                                                                                                                                                            |
+| ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Advanced graphics programming using OpenGL [1]                                                                     | This book covers a wide variety of graphics concepts with sample implementations in OpenGL. The book is aimed at people who have a basic understanding of OpenGL and wish to expand their knowledge base.                             | This book forms a basis for the core render pipeline and the generic lighting implementation used to ensure that an optimization does not prevent the use of lighting techniques. |
+| Interactive indirect illumination using voxel cone tracing [2]                                                     | This paper covers using cone tracing to simulate global illumination and ambient occlusion through voxelizing the scene and then using a cone tracing algorithm on the created sparse voxel octree to calculate lighting information. | This paper shows a method for cone tracing using a sparse voxel octree. This will form a basis for advanced lighting used to represent advanced graphical techniques.             |
+| Efficient sparse voxel octrees [3] and Efficient sparse voxel octrees–analysis, extensions, and implementation [4] | These papers cover an implementation of sparse voxel octrees which is used for a raycasting based renderer for voxels.                                                                                                                | These two papers cover the theory that can be used for storing voxels for a raycasted rendering approach and cone traced lighting.                                                |
+| Greedy Meshing Voxels Fast [5]                                                                                     | This talk focuses on a method of creating a mesh from voxel data through binary greedy meshing.                                                                                                                                       | This talk forms the basis for an implementation of the binary greedy meshing algorithm. A subset of this is used for a binary culled mesher as a standalone optimization.         |
 
 ## Aims and Objectives
 
@@ -54,7 +53,7 @@ gantt
 		Load test scenes :mload, after environ, 2d
 	section Test
 		Test environment creation :environ, after port, 3d
-		Automated benchmarking setup :bench, after environ, until cone
+		Automated benchmarking setup :bench, after environ, until slip
 	section Raycasting
 		Research :rcres, after environ, 5d
 		Implementation :rcim, after rcres, 10d
@@ -67,25 +66,18 @@ gantt
 
 ```
 I have given 5 days to implement the core render framework as this is the most important part of the implementation as everything else is based on it. I believe that 5 days is enough for this as I have already started working on it, and it is nearly at a usable state. This covers objective 2.
-
-All of the meshing algorithms are already implemented and only need to be ported to work with the core render framework. This time accounts for the time it will take to port over the implementations to use the render framework, as well as any time taken in the future to tweak the implementations. Two days have been allocated to implement a method to load in the test scenes to be used for testing. This should not take too long as all meshers store their voxel data in a similar structure. Part of this period will cover objective 3 and the rest will contribute to objective 5.
-
+The meshing algorithms are already implemented but need to be ported to use the core render framework. This time is for porting over the implementations, as well as any time taken in the future required for fixes. Two days have been allocated to implement a method to load in the test scenes to be used for testing. This should not take too long as all meshers store their voxel data in a similar structure. Part of this period will cover objective 3 and the rest will contribute to objective 5.
 Three days are allocated for creating test scenes. This includes smaller detailed scenes to test specifics in a contained environment as well as larger scenes that are created with basic procedural generation. Since this project does not focus on detail, these environments do not need to be overly complex.
-The period for automated benchmarking spans the period of all implementations as I intend to implement these tests as I work.
-These two periods will cover objective 4.
-
 I have a section for dedicating my time to researching raycasting techniques. This is in preparation for the implementation afterwards as I feel it best to properly understand what I am about to implement. This is tentatively allocated 5 days although I will likely start on the implementation earlier.
-
 The raycasting implementation and cone traced lighting overlap as they use many of the same techniques that can be reused.
-
 I intend to start writing the main dissertation after I have finished the port of the meshing algorithms. This will allow me to write each section while it is still fresh.
-
 The time from after cone tracing is finished until a month before the due date is dedicated to any future optimizations I discover from my ongoing research.
-
 Two weeks of slippage is included and the final two weeks are solely dedicated to finishing the dissertation. This will safeguard from tasks taking longer than expected.
 
 ### Risks
-There is a risk that I will not be able to implement the cone traced lighting in a reasonable amount of time. I have allocated time for a decent amount of runover but if that proves to be insufficient then I can abandon this feature without affecting any others. While not ideal as I intend to ensure the optimizations are compatible with more advanced graphical techniques, I can fall back to Phong Shading and Shadow Mapping that will be implemented with the core render framework.
+There is a risk that I will not be able to implement the cone traced lighting in a reasonable amount of time. I have allocated time for runover but if that proves to be insufficient then I can abandon this feature without affecting any others. While not ideal as I intend to ensure the optimizations are compatible with more advanced graphical techniques, I can fall back to simpler techniques.
+The iterative approach combined with weekly meetings with my supervisor which will help avoid feature creep and to handle unexpected complexity more efficiently.
+The project uses Git for version control and is stored on the cloud using Github. This will ensure that no work is lost and any work that causes detrimental effects can be easily reverted.
 
 
 
