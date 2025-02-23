@@ -1,10 +1,11 @@
 {
-  "cssTheme": "",
+  "cssTheme": "Catppuccin",
   "interfaceFontFamily": "Mona Sans",
   "textFontFamily": "Monaspace Neon",
   "monospaceFontFamily": "Monaspace Neon Var",
   "enabledCssSnippets": [
     "export"
   ],
-  "baseFontSize": 15
+  "baseFontSize": 15,
+  "theme": "system"
 }
