@@ -1,5 +1,5 @@
 use glam::{DQuat, EulerRot, Mat4, Vec3, vec3};
-use glium::winit::keyboard::KeyCode;
+use winit::keyboard::KeyCode;
 
 use crate::{Input, math::perspective};
 

@@ -89,3 +89,19 @@ impl From<InstanceData> for u32 {
         data.0
     }
 }
+
+impl std::fmt::Display for InstanceData {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "InstanceData {{ x: {}, y: {}, z: {}, dir: {:?}, width: {}, height: {} }}\n{:032b}",
+            self.x(),
+            self.y(),
+            self.z(),
+            self.dir(),
+            self.width() + 1,
+            self.height() + 1,
+            self.0
+        )
+    }
+}

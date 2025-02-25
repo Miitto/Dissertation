@@ -2,3 +2,4 @@ target/
 *.opt
 Docs/export/
 Docs/exports/
+*.glsl

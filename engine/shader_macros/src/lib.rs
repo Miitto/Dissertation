@@ -59,13 +59,11 @@ pub fn program(input: TokenStream) -> TokenStream {
 
     let vertex_shader = build_glsl::vertex_shader(&input);
     let fragment_shader = build_glsl::fragment_shader(&input);
-    let geometry_shader = build_glsl::geometry_shader(&input);
 
     let vertex_struct = build_rust::vertex_struct(&input);
     let uniform_struct = build_rust::uniform_struct(&input);
 
-    let program_impl =
-        build_rust::program(&vertex_shader, &fragment_shader, geometry_shader.as_ref());
+    let program_impl = build_rust::program(&vertex_shader, &fragment_shader, None);
 
     let name = format_ident!("{}", input.meta.name.to_string());
 

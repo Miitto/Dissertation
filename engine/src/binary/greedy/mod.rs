@@ -1,32 +1,35 @@
-use std::{collections::HashMap, rc::Rc};
+use shaders::Program;
+use std::collections::HashMap;
 
 use chunk::Chunk;
-use glam::{mat4, vec4};
-use glium::{DrawParameters, VertexBuffer, uniform};
-use renderer::{Renderable, State};
-use shaders::Program as _;
+use glam::{mat4, vec3, vec4};
+use renderer::{DrawMode, DrawType, Renderable, State, buffers::Vao, draw};
 use voxel::{BlockType, greedy_voxel};
 
-use crate::tests::Test;
+use crate::{Args, tests::Scene};
 
 mod chunk;
 mod voxel;
 
-pub fn setup(test: Test, state: &State) -> ChunkManager {
+pub fn setup(args: &Args, state: &State) -> ChunkManager {
     let mut manager = ChunkManager::new(state);
 
-    match test {
-        Test::Single => {
+    let scene = args.scene;
+    let radius = args.radius;
+    let height = args.depth;
+
+    match scene {
+        Scene::Single => {
             let mut chunk = Chunk::fill(BlockType::Air);
             chunk.set([0, 0, 1], BlockType::Grass);
             manager.chunks.insert([0, 0, 0], chunk);
         }
-        Test::Cube => {
+        Scene::Cube => {
             let mut chunk = Chunk::fill(BlockType::Grass);
             chunk.set([0, 0, 1], BlockType::Air);
             manager.chunks.insert([0, 0, 0], chunk);
         }
-        Test::Plane(radius, height) => {
+        Scene::Plane => {
             for x in 0..radius {
                 for z in 0..radius {
                     let chunk = Chunk::flat(height, BlockType::Grass);
@@ -34,7 +37,7 @@ pub fn setup(test: Test, state: &State) -> ChunkManager {
                 }
             }
         }
-        Test::Perlin(_radius) => {
+        Scene::Perlin => {
             // TODO: Perlin noise
             todo!("Perlin noise")
         }
@@ -46,14 +49,11 @@ pub fn setup(test: Test, state: &State) -> ChunkManager {
 
 pub struct ChunkManager {
     chunks: HashMap<[i32; 3], chunk::Chunk>,
-    vertex_buffer: glium::VertexBuffer<greedy_voxel::Vertex>,
-    index_buffer: glium::index::NoIndices,
-    program: Rc<glium::Program>,
-    draw_parameters: DrawParameters<'static>,
+    plane_vao: Vao<greedy_voxel::Vertex, greedy_voxel::Instance>,
 }
 
 impl ChunkManager {
-    pub fn new(state: &State) -> Self {
+    pub fn new(_state: &State) -> Self {
         let vertices = [
             greedy_voxel::Vertex::new([0.0, 0.0, 0.0]),
             greedy_voxel::Vertex::new([1.0, 0.0, 0.0]),
@@ -61,30 +61,17 @@ impl ChunkManager {
             greedy_voxel::Vertex::new([1.0, 0.0, 1.0]),
         ];
 
-        let v_buf = VertexBuffer::new(state.display.as_ref().unwrap(), &vertices)
-            .expect("Failed to make chunk vertex buffer");
-        let i_buf = glium::index::NoIndices(glium::index::PrimitiveType::TriangleStrip);
-
-        let program = greedy_voxel::Program::get(state.display.as_ref().unwrap())
-            .expect("Failed to make chunk shader");
-
-        let draw_parameters = DrawParameters {
-            depth: glium::Depth {
-                test: glium::draw_parameters::DepthTest::IfLessOrEqual,
-                write: true,
-                ..Default::default()
-            },
-            //backface_culling: glium::draw_parameters::BackfaceCullingMode::CullCounterClockwise,
-            //polygon_mode: glium::draw_parameters::PolygonMode::Line,
-            ..Default::default()
-        };
+        let vao = Vao::new(
+            &vertices,
+            None,
+            DrawType::Static,
+            DrawMode::TriangleStrip,
+            None as Option<&[greedy_voxel::Instance]>,
+        );
 
         Self {
             chunks: HashMap::new(),
-            vertex_buffer: v_buf,
-            index_buffer: i_buf,
-            program,
-            draw_parameters,
+            plane_vao: vao,
         }
     }
 }
@@ -103,36 +90,22 @@ impl Renderable for ChunkManager {
                 vec4(pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0),
             );
 
-            let instances = chunk.instance_positions();
+            let instance_vbo = chunk.get_instances();
+
+            let vao = self.plane_vao.with_instance(instance_vbo);
 
             let uniforms = greedy_voxel::Uniforms {
                 modelMatrix: model_matrix.to_cols_array_2d(),
                 viewMatrix: state.camera.get_view().to_cols_array_2d(),
                 projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
-                sky_light_color: None,
-                sky_light_direction: None,
-                ambient_light: None,
+                sky_light_color: vec4(1.0, 1.0, 1.0, 1.0).to_array(),
+                sky_light_direction: vec3(-1.0, -1.0, -1.0).normalize().to_array(),
+                ambient_light: 0.5,
             };
 
-            let uniforms = uniform! {
-                modelMatrix: uniforms.modelMatrix,
-                viewMatrix: uniforms.viewMatrix,
-                projectionMatrix: uniforms.projectionMatrix,
-            };
+            let program = greedy_voxel::Program::get();
 
-            let instances = glium::VertexBuffer::new(state.display.as_ref().unwrap(), &instances)
-                .expect("Failed to make instance buffer");
-            let instances = instances
-                .per_instance()
-                .expect("Failed to convert to per instance");
-
-            _ = state.draw(
-                (&self.vertex_buffer, instances),
-                self.index_buffer,
-                &self.program,
-                &uniforms,
-                &self.draw_parameters,
-            );
+            draw::draw(&vao, &program, &uniforms)
         }
     }
 }

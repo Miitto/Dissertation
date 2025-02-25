@@ -1,14 +1,17 @@
 use crate::{
     ProgramInput,
-    shader_var::{ShaderObjects, ShaderType},
+    shader_var::{ShaderObjects, ShaderType, ShaderVar},
 };
-use proc_macro2::{Ident, TokenStream};
+use proc_macro2::Ident;
+use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
 pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
     let ProgramInput { content: info, .. } = input;
 
-    let (fields, field_names) = if let Some(vertex_fn) = &info.vertex_fn {
+    let mut vertex_in_count = 0;
+
+    let (fields, binds) = if let Some(vertex_fn) = &info.vertex_fn {
         let in_param = vertex_fn
             .params
             .first()
@@ -30,15 +33,14 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
                 }
             })
             .collect();
-        let names = vertex_input
-            .fields
-            .iter()
-            .map(|f| format_ident!("{}", f.name.to_string()))
-            .collect();
 
-        (fields, names)
+        vertex_in_count = vertex_input.fields.len();
+
+        let binds = vertex_binds(format_ident!("Vertex"), &vertex_input.fields, 0);
+
+        (fields, binds)
     } else {
-        (vec![], vec![])
+        (vec![], quote! {})
     };
 
     let instance_struct =
@@ -60,11 +62,11 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
                 })
                 .collect();
 
-            let names: Vec<Ident> = vertex_input
-                .fields
-                .iter()
-                .map(|f| format_ident!("{}", f.name.to_string()))
-                .collect();
+            let vertex_binds = vertex_binds(
+                format_ident!("Instance"),
+                &vertex_input.fields,
+                vertex_in_count,
+            );
 
             quote! {
                 #[derive(Debug, Clone, Copy)]
@@ -72,7 +74,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
                     #(pub #fields),*
                 }
 
-                ::glium::implement_vertex!(Instance, #(#names),*);
+                #vertex_binds
             }
         } else {
             quote! {}
@@ -84,7 +86,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
             #(pub #fields),*
         }
 
-        ::glium::implement_vertex!(Vertex, #(#field_names),*);
+        #binds
 
         #instance_struct
     }
@@ -111,9 +113,27 @@ pub fn uniform_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
         })
         .collect();
 
+    let binds = info.uniforms.iter().map(|uniform| {
+        let name = format_ident!("{}", uniform.var.name.to_string());
+        quote! {
+            let loc = renderer::get_uniform_location(program, stringify!(#name));
+            self.#name.set_uniform(loc);
+        }
+    });
+
     quote! {
         pub struct Uniforms {
             #(pub #fields),*
+        }
+
+        impl renderer::Uniforms for Uniforms {
+            fn bind(&self, program: &renderer::Program) {
+                    use renderer::UniformValue;
+
+                    program.bind();
+
+                    #(#binds)*
+            }
         }
     }
 }
@@ -142,6 +162,45 @@ pub fn program(
 
             fn geometry() -> Option<&'static str> {
                 #geom_source
+            }
+        }
+    }
+}
+
+fn vertex_binds(ident: Ident, fields: &[ShaderVar], layout_start: usize) -> TokenStream {
+    let fields: Vec<TokenStream> = fields
+        .iter()
+        .enumerate()
+        .map(|(loc, field)| {
+            let loc = loc + layout_start;
+            let ty = &field.t;
+            let field_name = format_ident!("{}", &field.name.to_string());
+            quote! {
+                renderer::vertex::format::VertexAtrib {
+                    location: #loc,
+                    ty: {const fn attr_type_of_val<T: renderer::vertex::Attribute>(_: Option<&T>)
+                                -> renderer::vertex::format::AttributeType
+                            {
+                                <T as renderer::vertex::Attribute>::TYPE
+                            }
+                            attr_type_of_val(None::<&#ty>)
+                    },
+                    offset: renderer::offset_of!(#ident, #field_name)
+               }
+            }
+        })
+        .collect();
+
+    quote! {
+        impl #ident {
+            const BINDINGS: renderer::vertex::format::VertexFormat = &[
+                #(#fields),*
+            ];
+        }
+
+        impl renderer::vertex::Vertex for #ident {
+            fn bindings() -> renderer::vertex::format::VertexFormat {
+                Self::BINDINGS
             }
         }
     }

@@ -6,8 +6,8 @@ edition = "2024"
 [dependencies]
 quote = "1.0.38"
 syn = "2.0.96"
-shaders_common = { path = "../shaders_common" }
 proc-macro2 = "1.0.93"
+render_common.workspace = true
 
 [lib]
 proc-macro = true

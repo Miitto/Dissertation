@@ -1,61 +1,95 @@
-use renderer::Renderable;
+use renderer::{Renderable, State, buffers::Vao};
+use shaders::Program;
+use voxel::{Voxel, instanced_voxel};
 
-use crate::tests::Test;
+use crate::{Args, tests::Scene};
 
 mod voxel;
 
-pub fn setup(test: Test) -> VoxelManager {
+pub fn setup(args: &Args, instance: bool) -> VoxelManager {
     use voxel::Voxel;
 
+    let scene = args.scene;
+    let radius = args.radius;
+    let height = args.depth;
+
     let mut renderables = Vec::new();
-    match test {
-        Test::Single => {
-            renderables.push(Box::new(Voxel::new([0, 0, 0])) as Box<dyn Renderable>);
+    match scene {
+        Scene::Single => {
+            renderables.push(Voxel::new([0, 0, 0]));
         }
-        Test::Cube => {
+        Scene::Cube => {
             renderables.reserve_exact(32 * 32 * 32);
 
             for x in 0..32 {
                 for y in 0..32 {
                     for z in 0..32 {
-                        renderables.push(Box::new(Voxel::new([x, y, z])) as Box<dyn Renderable>);
+                        renderables.push(Voxel::new([x, y, z]));
                     }
                 }
             }
         }
-        Test::Plane(radius, height) => {
+        Scene::Plane => {
             renderables.reserve_exact(radius as usize * radius as usize * height as usize);
 
             for x in 0..radius as i32 {
                 for z in 0..radius as i32 {
                     for y in 0..height as i32 {
-                        renderables.push(Box::new(Voxel::new([x, y, z])) as Box<dyn Renderable>);
+                        renderables.push(Voxel::new([x, y, z]));
                     }
                 }
             }
         }
-        Test::Perlin(_radius) => {
+        Scene::Perlin => {
             // TODO: Perlin noise
         }
     }
 
-    VoxelManager::new(renderables)
+    VoxelManager::new(renderables, instance)
 }
 
 pub struct VoxelManager {
-    voxels: Vec<Box<dyn Renderable>>,
+    voxels: Vec<Voxel>,
+    instance: bool,
 }
 
 impl VoxelManager {
-    pub fn new(voxels: Vec<Box<dyn Renderable>>) -> Self {
-        Self { voxels }
+    pub fn new(voxels: Vec<Voxel>, instance: bool) -> Self {
+        Self { voxels, instance }
     }
 }
 
 impl Renderable for VoxelManager {
     fn render(&self, state: &mut renderer::State) {
-        for voxel in &self.voxels {
-            voxel.render(state);
+        if !self.instance {
+            for voxel in &self.voxels {
+                voxel.render(state);
+            }
+            return;
         }
+
+        let vertices = Voxel::get_vertices();
+        let indices = Voxel::get_indices();
+
+        let instances = self.voxels.iter().map(|v| instanced_voxel::Instance {
+            pos: v.get_position(),
+        });
+
+        let vao = Vao::new(
+            &vertices,
+            Some(&indices),
+            renderer::DrawType::Static,
+            renderer::DrawMode::Triangles,
+            Some(&instances.collect::<Vec<_>>()),
+        );
+
+        let program = instanced_voxel::Program::get();
+
+        let uniforms = instanced_voxel::Uniforms {
+            viewMatrix: state.camera.get_view().to_cols_array_2d(),
+            projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
+        };
+
+        renderer::draw::draw(&vao, &program, &uniforms);
     }
 }

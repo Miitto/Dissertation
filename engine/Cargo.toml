@@ -7,26 +7,24 @@ edition = "2024"
 rustflags = ["-Z", "threads=8"]
 
 [workspace]
-members = ["renderer", "shader_macros", "shaders", "shaders_common"]
+members = ["render_common", "renderer", "shader_macros", "shaders"]
 
 [workspace.dependencies]
-glium = "0.36.0"
+render_common = { path = "./render_common" }
 renderer = { path = "./renderer/" }
 glam = "0.29.2"
 shaders = { path = "./shaders" }
+gl = "0.14.0"
+glutin = "0.32.2"
+winit = "0.30.9"
 
 [dependencies]
-glium.workspace = true
 renderer.workspace = true
 shaders.workspace = true
 glam.workspace = true
+winit.workspace = true
+gl.workspace = true
+clap = { version = "4.5.31", features = ["derive"] }
 
 [target.'cfg(windows)'.dependencies]
 optick = { version = "1.3.4" }
-
-[features]
-frustum = ["chunks"]
-chunks = []
-binary = []
-culled = []
-greedy = ["binary"]

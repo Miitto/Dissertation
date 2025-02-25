@@ -1,0 +1,9 @@
+[package]
+name = "render_common"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+winit.workspace = true
+gl.workspace = true
+glutin.workspace = true

@@ -1,3 +1,5 @@
+use std::{fs::OpenOptions, io::Write};
+
 use proc_macro::{Diagnostic, Level};
 
 use crate::{
@@ -79,11 +81,13 @@ pub fn vertex_shader(
             }
         }) {
             let iter = iter.chain(instance.fields.iter());
-            iter.map(|f| format!("in {} {};", f.t, f.name))
+            iter.enumerate()
+                .map(|(idx, f)| format!("layout(location = {}) in {} {};", idx, f.t, f.name))
                 .collect::<Vec<String>>()
                 .join("\n")
         } else {
-            iter.map(|f| format!("in {} {};", f.t, f.name))
+            iter.enumerate()
+                .map(|(idx, f)| format!("layout(location = {}) in {} {};", idx, f.t, f.name))
                 .collect::<Vec<String>>()
                 .join("\n")
         }
@@ -136,7 +140,13 @@ pub fn vertex_shader(
     let out_vars = vertex_out_struct
         .fields
         .iter()
-        .map(|f| format!("out {} {}_{};", f.t, vertex_out_struct.name, f.name))
+        .enumerate()
+        .map(|(idx, f)| {
+            format!(
+                "layout(location = {}) out {} {}_{};",
+                idx, f.t, vertex_out_struct.name, f.name
+            )
+        })
         .collect::<Vec<String>>()
         .join("\n");
 
@@ -154,6 +164,11 @@ pub fn vertex_shader(
 
     let content = format!(
         r#"#version {}
+// In
+{in_vars}
+
+// Out
+{out_vars}
 
 // Structs
 {structs}
@@ -167,16 +182,11 @@ pub fn vertex_shader(
 // Vertex
 {vertex_fn}
 
-// In
-{in_vars}
-
-// Out
-{out_vars}
-
 void main() {{
     // In
     {in_to_struct}
 
+    // Instance
     {instance_to_struct}
 
     // Out
@@ -226,7 +236,13 @@ pub fn fragment_shader(
     let in_vars = frag_input
         .fields
         .iter()
-        .map(|f| format!("in {} {}_{};", f.t, frag_input.name, f.name))
+        .enumerate()
+        .map(|(idx, f)| {
+            format!(
+                "layout(location = {}) in {} {}_{};",
+                idx, f.t, frag_input.name, f.name
+            )
+        })
         .collect::<Vec<String>>()
         .join("\n");
 
@@ -249,6 +265,12 @@ pub fn fragment_shader(
     let content = format!(
         r#"#version {}
 
+// In
+{in_vars}
+
+// Out
+layout(location = 0) out {out_var_type} frag_output;
+
 // Structs
 {structs}
 
@@ -261,12 +283,6 @@ pub fn fragment_shader(
 // Fragment
 {frag_fn}
 
-// In
-{in_vars}
-
-// Out
-out {out_var_type} frag_output;
-
 void main() {{
     // In
     {in_to_struct}
@@ -278,104 +294,4 @@ void main() {{
     );
 
     content
-}
-
-#[expect(unreachable_code, unused_variables)]
-pub fn geometry_shader(
-    ProgramInput {
-        content: info,
-        meta,
-    }: &ProgramInput,
-) -> Option<String> {
-    return None;
-    let uniforms = get_uniforms(info);
-
-    let structs = get_structs(info);
-
-    let functions = get_functions(info);
-
-    info.geometry_fn.as_ref().map(|geom_fn| {
-        let geom_input = match &geom_fn.params[0].t {
-            ShaderType::Object(ShaderObjects::Custom(s)) => s,
-            _ => {
-                panic!("Fragment function must take a struct as input");
-            }
-        };
-
-        let in_vars = geom_input
-            .fields
-            .iter()
-            .map(|f| format!("in {} {};", f.t, f.name))
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        let in_to_struct_assign = geom_input
-            .fields
-            .iter()
-            .map(|f| format!("    geom_input.{} = {};", f.name, f.name))
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        let in_to_struct = format!("{} geom_input;\n{}", geom_input.name, in_to_struct_assign);
-
-        let geom_out_struct = match &geom_fn.var.t {
-            ShaderType::Object(ShaderObjects::Custom(s)) => s,
-            _ => {
-                panic!("Fragment function must take a struct as input");
-            }
-        };
-
-        let out_vars = geom_out_struct
-            .fields
-            .iter()
-            .map(|f| format!("out {} {}_{};", f.t, geom_out_struct.name, f.name))
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        let struct_to_out_assign = geom_out_struct
-            .fields
-            .iter()
-            .map(|f| {
-                format!(
-                    "{}_{} = geom_output.{};",
-                    geom_out_struct.name, f.name, f.name
-                )
-            })
-            .collect::<Vec<String>>()
-            .join("\n");
-
-        let content = format!(
-            r#"#version {}
-
-// Structs
-{structs}
-
-// Uniforms
-{uniforms}
-
-// Functions
-{functions}
-
-// Geometry
-{geom_fn}
-
-// In
-{in_vars}
-
-// Out
-{out_vars}
-
-void main() {{
-    // In
-    {in_to_struct}
-
-    // Out
-    {} geom_output = {}(input);
-    {}
-}}"#,
-            meta.version, geom_fn.var.t, geom_fn.var.name, struct_to_out_assign
-        );
-
-        content
-    })
 }

@@ -1,14 +1,10 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
 
-use glium::{
-    Display, DrawError, DrawParameters, Frame, Program, Surface,
-    glutin::surface::WindowSurface,
-    index, uniforms, vertex,
-    winit::{
-        event::{ElementState, KeyEvent, MouseButton},
-        keyboard::KeyCode,
-        window::Window,
-    },
+use glutin::surface::GlSurface;
+use render_common::Display;
+use winit::{
+    event::{ElementState, KeyEvent, MouseButton},
+    keyboard::KeyCode,
 };
 
 use crate::{
@@ -17,19 +13,23 @@ use crate::{
 };
 
 pub struct State {
-    pub window: Option<Window>,
-    pub display: Option<Display<WindowSurface>>,
+    display: Option<Rc<Display>>,
     input: Input,
     last_frame_time: std::time::Instant,
     delta_time: f32,
     pub camera: Box<dyn Camera>,
-    pub target: Option<Frame>,
 }
 
 impl State {
-    pub fn new_window(&mut self, window: Window, display: Display<WindowSurface>) {
-        self.window = Some(window);
-        self.display = Some(display);
+    pub fn display(&self) -> Rc<Display> {
+        self.display
+            .as_ref()
+            .expect("Display is not initialized")
+            .clone()
+    }
+
+    pub fn new_window(&mut self, display: Display) {
+        self.display = Some(Rc::new(display));
     }
 
     fn frame_time(&self) -> f32 {
@@ -45,48 +45,30 @@ impl State {
     }
 
     pub fn new_frame(&mut self) {
-        if let Some(display) = &self.display {
-            // optick::next_frame();
-            self.delta_time = self.frame_time();
-            self.last_frame_time = std::time::Instant::now();
+        self.delta_time = self.frame_time();
+        self.last_frame_time = std::time::Instant::now();
 
-            let mut target = display.draw();
-            target.clear_color_and_depth((0.1, 0.1, 0.1, 1.0), f32::MAX);
-
-            self.target = Some(target);
-        }
+        unsafe {
+            gl::ClearColor(0.1, 0.1, 0.1, 1.0);
+            gl::ClearDepth(1.0);
+            gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
+        };
     }
 
     pub fn end_frame(&mut self) {
-        // optick::event!("State End Frame");
         self.input.end_frame();
 
-        if let Some(target) = self.target.take() {
-            _ = target.finish();
+        let display = self.display();
+
+        unsafe {
+            gl::Finish();
+            _ = display.surface.swap_buffers(&display.context);
         }
     }
 
-    pub fn draw<'a, 'b, V, I, U>(
-        &mut self,
-        vertex_buffer: V,
-        index_buffer: I,
-        program: &Program,
-        uniforms: &U,
-        draw_parameters: &DrawParameters<'_>,
-    ) -> Result<(), DrawError>
-    where
-        I: Into<index::IndicesSource<'a>>,
-        U: uniforms::Uniforms,
-        V: vertex::MultiVerticesSource<'b>,
-    {
-        // optick::event!("Draw Call");
-        self.target.as_mut().unwrap().draw(
-            vertex_buffer,
-            index_buffer,
-            program,
-            uniforms,
-            draw_parameters,
-        )
+    pub fn draw(&mut self) {
+        // TODO: Draw
+        todo!("Draw Call");
     }
 
     pub fn is_pressed(&self, key: &KeyCode) -> bool {
@@ -111,14 +93,14 @@ impl State {
 
     pub fn click(&mut self, button: MouseButton, state: ElementState) {
         if button == MouseButton::Right {
+            let display = self.display();
             if state.is_pressed() {
-                if let Some(window) = &self.window {
-                    self.input.lock_cursor(window);
-                }
-            } else if let Some(window) = &self.window {
-                self.input.unlock_cursor(window);
+                self.input.lock_cursor(display.get_window());
+            } else {
+                self.input.unlock_cursor(display.get_window());
             }
         }
+
         self.input.click(button, state);
     }
 
@@ -143,13 +125,11 @@ impl State {
 impl Default for State {
     fn default() -> Self {
         Self {
-            window: None,
             display: None,
             input: Input::default(),
             last_frame_time: std::time::Instant::now(),
             delta_time: 0.,
             camera: Box::new(PerspectiveCamera::default()),
-            target: None,
         }
     }
 }

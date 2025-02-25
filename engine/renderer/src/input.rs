@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use glium::winit::{
+use winit::{
     event::{ElementState, KeyEvent, MouseButton},
     keyboard::KeyCode,
     window::Window,
@@ -84,13 +84,13 @@ impl Input {
     pub fn lock_cursor(&mut self, window: &Window) {
         self.mouse.is_locked = true;
         window.set_cursor_visible(false);
-        _ = window.set_cursor_grab(glium::winit::window::CursorGrabMode::Confined);
+        _ = window.set_cursor_grab(winit::window::CursorGrabMode::Confined);
     }
 
     pub fn unlock_cursor(&mut self, window: &Window) {
         self.mouse.is_locked = false;
         window.set_cursor_visible(true);
-        _ = window.set_cursor_grab(glium::winit::window::CursorGrabMode::None);
+        _ = window.set_cursor_grab(winit::window::CursorGrabMode::None);
     }
 
     pub fn wheel(&self) -> f32 {

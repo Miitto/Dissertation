@@ -395,7 +395,14 @@ fn parse_function<'a>(
 
     let stringified = content
         .into_iter()
-        .map(|t| t.to_string())
+        .map(|t| {
+            if let TokenTree::Punct(p) = &t {
+                if p.as_char() == ';' {
+                    return ";\n".to_string();
+                }
+            }
+            t.to_string()
+        })
         .collect::<Vec<_>>()
         .join(" ");
 

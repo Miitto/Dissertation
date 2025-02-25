@@ -1,8 +1,17 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
 #[allow(dead_code)]
-pub enum Test {
+pub enum Scene {
     Single,
     Cube,
-    Plane(u8, u8),
-    Perlin(u8),
+    Plane,
+    Perlin,
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+pub enum Test {
+    Basic,
+    BasicInstanced,
+    Chunk,
+    Culled,
+    Greedy,
 }
