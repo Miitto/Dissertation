@@ -22,6 +22,11 @@ pub struct Chunk {
 
 impl Chunk {
     pub fn set(&mut self, pos: [usize; 3], block_type: BlockType) {
+        if pos[0] >= CHUNK_SIZE || pos[1] >= CHUNK_SIZE || pos[2] >= CHUNK_SIZE {
+            eprintln!("Coord: {:?} is outside of chunk", pos);
+            return;
+        }
+
         *self.instances.borrow_mut() = None;
         self.voxels[pos[0]][pos[1]][pos[2]].set_type(block_type);
 
@@ -74,8 +79,6 @@ impl Chunk {
             for face in greedy[usize::from(dir)].iter() {
                 let data = InstanceData::new(face.x, face.y, face.z, dir, face.width, face.height)
                     .rotate_on_dir();
-
-                println!("{}", data);
 
                 instances.push(greedy_voxel::Instance { data: data.into() });
             }

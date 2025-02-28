@@ -1,3 +1,4 @@
+use bracket_noise::prelude::*;
 use shaders::Program;
 use std::collections::HashMap;
 
@@ -38,8 +39,38 @@ pub fn setup(args: &Args, state: &State) -> ChunkManager {
             }
         }
         Scene::Perlin => {
-            // TODO: Perlin noise
-            todo!("Perlin noise")
+            let mut noise = FastNoise::seeded(1234);
+            noise.set_noise_type(NoiseType::Perlin);
+            noise.set_frequency(0.1);
+
+            for chunk_x in 0..radius as usize {
+                for chunk_z in 0..radius as usize {
+                    for x in 0..32 {
+                        for z in 0..32 {
+                            let absolute_x = (chunk_x * 32) as i32 + x as i32;
+                            let absolute_z = (chunk_z * 32) as i32 + z as i32;
+
+                            let height = (noise.get_noise(absolute_x as f32, absolute_z as f32)
+                                * (height as f32)) as i32;
+
+                            for chunk_y in 0..=height / 32 {
+                                let chunk = manager
+                                    .chunks
+                                    .entry([chunk_x as i32, chunk_y, chunk_z as i32])
+                                    .or_insert_with(|| Chunk::flat(1, BlockType::Grass));
+
+                                for y in 0..32 {
+                                    let absolute_y = (chunk_y * 32) + y as i32;
+
+                                    if absolute_y < height {
+                                        chunk.set([x, y, z], BlockType::Grass);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -87,7 +118,12 @@ impl Renderable for ChunkManager {
                 right,
                 up,
                 forward,
-                vec4(pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0),
+                vec4(
+                    (pos[0] * 32) as f32,
+                    (pos[1] * 32) as f32,
+                    (pos[2] * 32) as f32,
+                    1.0,
+                ),
             );
 
             let instance_vbo = chunk.get_instances();

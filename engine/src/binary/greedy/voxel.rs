@@ -126,8 +126,8 @@ shaders::program!(greedy_voxel, {
             // Forward
             case 4: {
                 z = 0;
-                x = v_x * w;
-                y = (1-v_z) * h;
+                x = (1-v_z) * w;
+                y = (1-v_x) * h;
                 o.color = vec4(0.0, 1.0, 0.0, 1.0);
 
                 normal.z = -1.0;
@@ -136,9 +136,9 @@ shaders::program!(greedy_voxel, {
             // Backward
             case 5: {
                 z = 1;
-                x = (1-v_x) * w;
+                x = v_x * w;
                 y = (1-v_z) * h;
-                o.color = vec4(0.0, 0.0, 1.0, 1.0);
+                o.color = vec4(v_x, 0.0, 1.0, 1.0);
 
                 normal.z = 1.0;
                 break;
@@ -152,6 +152,7 @@ shaders::program!(greedy_voxel, {
         vec3 position = vec3(o_x, o_y, o_z);
 
         o.color = apply_sky_lighting(o.color, normal, position);
+
 
         gl_Position = mvp * vec4(position, 1.0);
 

@@ -26,7 +26,7 @@ impl Default for PerspectiveCamera {
             fov: 90.0,
             aspect_ratio: 16.0 / 9.0,
             near: 0.1,
-            far: 100.0,
+            far: 1000.0,
             rotation: DQuat::IDENTITY,
             speed: 0.01,
             key_sensitivity: 0.1,

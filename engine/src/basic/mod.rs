@@ -3,6 +3,7 @@ use shaders::Program;
 use voxel::{Voxel, instanced_voxel};
 
 use crate::{Args, tests::Scene};
+use bracket_noise::prelude::*;
 
 mod voxel;
 
@@ -41,7 +42,22 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
             }
         }
         Scene::Perlin => {
-            // TODO: Perlin noise
+            let mut noise = FastNoise::seeded(1234);
+            noise.set_noise_type(NoiseType::Perlin);
+            noise.set_frequency(0.1);
+
+            let radius = (radius as u32) * 32;
+
+            renderables.reserve_exact((radius * radius) as usize);
+
+            for x in 0..radius as i32 {
+                for z in 0..radius as i32 {
+                    let height = (noise.get_noise(x as f32, z as f32) * (height as f32)) as i32;
+                    for y in 0..height {
+                        renderables.push(Voxel::new([x, y, z]));
+                    }
+                }
+            }
         }
     }
 

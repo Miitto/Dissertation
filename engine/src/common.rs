@@ -72,7 +72,7 @@ impl InstanceData {
 
         match dir {
             Dir::Up | Dir::Down => Self::new(x, z, y, dir, width, height),
-            Dir::Forward | Dir::Backward => Self::new(y, x, z, dir, width, height),
+            Dir::Forward | Dir::Backward => Self::new(x, y, z, dir, width, height),
             Dir::Left | Dir::Right => Self::new(z, y, x, dir, width, height),
         }
     }
