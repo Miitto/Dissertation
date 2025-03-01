@@ -15,14 +15,11 @@ mod enums;
 pub use enums::*;
 pub mod draw;
 mod uniforms;
+pub use ::shaders::{ProgramInternal, program};
 pub use memoffset::offset_of;
 pub use uniforms::*;
 
-use glutin::{
-    config::ConfigTemplateBuilder,
-    display::GetGlDisplay,
-    surface::{GlSurface, Surface, WindowSurface},
-};
+use glutin::{config::ConfigTemplateBuilder, display::GetGlDisplay, surface::GlSurface};
 use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::Window,
@@ -40,7 +37,7 @@ pub fn resize(display: &Display, width: u32, height: u32) {
     let surface = &display.surface;
     let context = &display.context;
     surface.resize(
-        &context,
+        context,
         NonZeroU32::new(width).unwrap(),
         NonZeroU32::new(height).unwrap(),
     );

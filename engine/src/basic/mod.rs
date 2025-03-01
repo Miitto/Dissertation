@@ -91,19 +91,19 @@ impl Renderable for VoxelManager {
             pos: v.get_position(),
         });
 
-        let vao = Vao::new(
+        let vao = Vao::new_instanced(
             &vertices,
             Some(&indices),
             renderer::DrawType::Static,
             renderer::DrawMode::Triangles,
-            Some(&instances.collect::<Vec<_>>()),
+            &instances.collect::<Vec<_>>(),
         );
 
         let program = instanced_voxel::Program::get();
 
         let uniforms = instanced_voxel::Uniforms {
-            viewMatrix: state.camera.get_view().to_cols_array_2d(),
-            projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
+            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
+            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
         };
 
         renderer::draw::draw(&vao, &program, &uniforms);

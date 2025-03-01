@@ -85,8 +85,8 @@ impl Renderable for Voxel {
 
         let uniforms = basic_voxel::Uniforms {
             modelMatrix: self.get_model_matrix().to_cols_array_2d(),
-            viewMatrix: state.camera.get_view().to_cols_array_2d(),
-            projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
+            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
+            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
         };
 
         let program = basic_voxel::Program::get();
@@ -96,7 +96,6 @@ impl Renderable for Voxel {
             Some(&indices),
             DrawType::Static,
             DrawMode::Triangles,
-            None as Option<&[basic_voxel::Vertex]>,
         );
 
         draw(&vao, &program, &uniforms);

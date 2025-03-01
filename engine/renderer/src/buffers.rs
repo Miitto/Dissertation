@@ -1,9 +1,12 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use crate::{DrawMode, DrawType, vertex::Vertex};
+use crate::{
+    DrawMode, DrawType,
+    vertex::{Vertex, format::VertexFormat},
+};
 
 #[allow(dead_code)]
-pub struct Vao<T, I>
+pub struct Vao<T, I = EmptyVertex>
 where
     T: Vertex,
     I: Vertex,
@@ -14,25 +17,28 @@ where
     indices: Rc<Indices>,
     ty: DrawType,
     pub mode: DrawMode,
+    /// Store if we reused the vao when adding an instance vbo. Will stop us from deleting the
+    /// vao twice
+    moved_to_instance: bool,
 }
 
-impl<T, I> Vao<T, I>
+#[derive(Debug, Copy, Clone)]
+pub struct EmptyVertex;
+
+impl Vertex for EmptyVertex {
+    fn bindings() -> VertexFormat {
+        &[]
+    }
+}
+
+impl<T> Vao<T>
 where
     T: Vertex,
-    I: Vertex,
 {
-    pub fn new(
-        data: &[T],
-        indices: Option<&[u32]>,
-        ty: DrawType,
-        mode: DrawMode,
-        instance: Option<&[I]>,
-    ) -> Self
+    pub fn new(data: &[T], indices: Option<&[u32]>, ty: DrawType, mode: DrawMode) -> Self
     where
         T: Vertex,
-        I: Vertex,
     {
-        let instance_vbo = instance.map(|i| Vbo::new(i, ty, true));
         let vbo = Vbo::new(data, ty, false);
 
         let mut vao = 0;
@@ -49,17 +55,51 @@ where
         };
 
         vbo.setup();
-        if let Some(instance_vbo) = &instance_vbo {
-            instance_vbo.setup();
-        }
 
         Vao {
             id: vao,
             ty,
             vbo: Rc::new(vbo),
-            instance_vbo: instance_vbo.map(Rc::new),
+            instance_vbo: None,
             indices: Rc::new(indices),
             mode,
+            moved_to_instance: false,
+        }
+    }
+}
+
+impl<T, I> Vao<T, I>
+where
+    T: Vertex,
+    I: Vertex,
+{
+    pub fn new_instanced(
+        data: &[T],
+        indices: Option<&[u32]>,
+        ty: DrawType,
+        mode: DrawMode,
+        instance: &[I],
+    ) -> Self
+    where
+        T: Vertex,
+        I: Vertex,
+    {
+        let instance_vbo = Vbo::new(instance, ty, true);
+
+        let mut vao = Vao::new(data, indices, ty, mode);
+
+        instance_vbo.setup();
+
+        vao.moved_to_instance = true;
+
+        Vao {
+            id: vao.id,
+            ty: vao.ty,
+            vbo: vao.vbo.clone(),
+            instance_vbo: Some(Rc::new(instance_vbo)),
+            indices: vao.indices.clone(),
+            mode: vao.mode,
+            moved_to_instance: false,
         }
     }
 
@@ -90,6 +130,7 @@ where
             instance_vbo: Some(instance),
             indices: self.indices.clone(),
             mode: self.mode,
+            moved_to_instance: false,
         };
 
         vao.unbind_all();
@@ -148,6 +189,10 @@ where
     I: Vertex,
 {
     fn drop(&mut self) {
+        if self.moved_to_instance {
+            return;
+        }
+
         unsafe {
             gl::DeleteVertexArrays(1, &self.id);
         };
@@ -288,6 +333,7 @@ impl Indices {
     }
 }
 
+#[allow(dead_code)]
 pub struct Ebo {
     id: gl::types::GLuint,
     len: usize,

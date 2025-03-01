@@ -32,6 +32,10 @@ struct Args {
     /// Height
     #[arg(short, long, default_value = "8")]
     depth: u8,
+
+    /// Frustum Culling
+    #[arg(short, long, default_value = "false")]
+    frustum_cull: bool,
 }
 
 fn main() {
@@ -74,7 +78,7 @@ impl ApplicationHandler for App {
 
         let size = display.get_window().inner_size();
         self.state
-            .camera
+            .cameras
             .on_window_resize(size.width as f32, size.height as f32);
 
         self.state.new_window(display);
@@ -117,7 +121,7 @@ impl ApplicationHandler for App {
                 // TODO: GL Surface resize
 
                 self.state
-                    .camera
+                    .cameras
                     .on_window_resize(window_size.width as f32, window_size.height as f32);
 
                 let display = self.state.display();
@@ -156,6 +160,8 @@ impl ApplicationHandler for App {
                 self.state.handle_input();
 
                 self.setup.as_ref().unwrap().render(&mut self.state);
+
+                self.state.cameras.render_gizmos(&self.state);
 
                 self.state.end_frame();
 

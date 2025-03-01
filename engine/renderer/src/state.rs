@@ -7,17 +7,14 @@ use winit::{
     keyboard::KeyCode,
 };
 
-use crate::{
-    Input, PositionDelta,
-    camera::{Camera, PerspectiveCamera},
-};
+use crate::{Input, PositionDelta, camera::CameraManager};
 
 pub struct State {
     display: Option<Rc<Display>>,
     input: Input,
     last_frame_time: std::time::Instant,
     delta_time: f32,
-    pub camera: Box<dyn Camera>,
+    pub cameras: CameraManager,
 }
 
 impl State {
@@ -64,11 +61,6 @@ impl State {
             gl::Finish();
             _ = display.surface.swap_buffers(&display.context);
         }
-    }
-
-    pub fn draw(&mut self) {
-        // TODO: Draw
-        todo!("Draw Call");
     }
 
     pub fn is_pressed(&self, key: &KeyCode) -> bool {
@@ -118,7 +110,7 @@ impl State {
 
     pub fn handle_input(&mut self) {
         let delta = self.delta();
-        self.camera.handle_input(&self.input, delta);
+        self.cameras.handle_input(&self.input, delta);
     }
 }
 
@@ -129,7 +121,7 @@ impl Default for State {
             input: Input::default(),
             last_frame_time: std::time::Instant::now(),
             delta_time: 0.,
-            camera: Box::new(PerspectiveCamera::default()),
+            cameras: CameraManager::default(),
         }
     }
 }

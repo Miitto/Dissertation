@@ -80,8 +80,8 @@ impl Renderable for ChunkManager {
 
             let _uniforms = culled_voxel::Uniforms {
                 modelMatrix: model_matrix.to_cols_array_2d(),
-                viewMatrix: state.camera.get_view().to_cols_array_2d(),
-                projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
+                viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
+                projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
             };
         }
     }

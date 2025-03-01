@@ -6,7 +6,7 @@ use proc_macro2::Ident;
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
-pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
+pub fn vertex_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenStream {
     let ProgramInput { content: info, .. } = input;
 
     let mut vertex_in_count = 0;
@@ -36,7 +36,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
 
         vertex_in_count = vertex_input.fields.len();
 
-        let binds = vertex_binds(format_ident!("Vertex"), &vertex_input.fields, 0);
+        let binds = vertex_binds(format_ident!("Vertex"), &vertex_input.fields, 0, use_crate);
 
         (fields, binds)
     } else {
@@ -66,6 +66,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
                 format_ident!("Instance"),
                 &vertex_input.fields,
                 vertex_in_count,
+                use_crate,
             );
 
             quote! {
@@ -92,7 +93,7 @@ pub fn vertex_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
     }
 }
 
-pub fn uniform_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
+pub fn uniform_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenStream {
     let ProgramInput { content: info, .. } = input;
 
     let fields: Vec<proc_macro2::TokenStream> = info
@@ -113,10 +114,16 @@ pub fn uniform_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
         })
         .collect();
 
+    let crate_path = if use_crate {
+        quote! {crate}
+    } else {
+        quote! {renderer}
+    };
+
     let binds = info.uniforms.iter().map(|uniform| {
         let name = format_ident!("{}", uniform.var.name.to_string());
         quote! {
-            let loc = renderer::get_uniform_location(program, stringify!(#name));
+            let loc = #crate_path::get_uniform_location(program, stringify!(#name));
             self.#name.set_uniform(loc);
         }
     });
@@ -126,9 +133,9 @@ pub fn uniform_struct(input: &ProgramInput) -> proc_macro2::TokenStream {
             #(pub #fields),*
         }
 
-        impl renderer::Uniforms for Uniforms {
-            fn bind(&self, program: &renderer::Program) {
-                    use renderer::UniformValue;
+        impl #crate_path::Uniforms for Uniforms {
+            fn bind(&self, program: &#crate_path::Program) {
+                    use #crate_path::UniformValue;
 
                     program.bind();
 
@@ -142,16 +149,23 @@ pub fn program(
     vertex_source: &str,
     fragment_source: &str,
     geom_source: Option<&String>,
+    use_crate: bool,
 ) -> proc_macro2::TokenStream {
     let geom_source = match geom_source {
         Some(s) => quote! { Some(#s) },
         None => quote! { None },
     };
 
+    let crate_path = if use_crate {
+        quote! {crate}
+    } else {
+        quote! {renderer}
+    };
+
     quote! {
         pub struct Program;
 
-        impl ::shaders::ProgramInternal for Program {
+        impl #crate_path::ProgramInternal for Program {
             fn vertex() -> &'static str {
                 #vertex_source
             }
@@ -167,7 +181,18 @@ pub fn program(
     }
 }
 
-fn vertex_binds(ident: Ident, fields: &[ShaderVar], layout_start: usize) -> TokenStream {
+fn vertex_binds(
+    ident: Ident,
+    fields: &[ShaderVar],
+    layout_start: usize,
+    use_crate: bool,
+) -> TokenStream {
+    let crate_path = if use_crate {
+        quote! {crate}
+    } else {
+        quote! {renderer}
+    };
+
     let fields: Vec<TokenStream> = fields
         .iter()
         .enumerate()
@@ -176,16 +201,16 @@ fn vertex_binds(ident: Ident, fields: &[ShaderVar], layout_start: usize) -> Toke
             let ty = &field.t;
             let field_name = format_ident!("{}", &field.name.to_string());
             quote! {
-                renderer::vertex::format::VertexAtrib {
+                #crate_path::vertex::format::VertexAtrib {
                     location: #loc,
-                    ty: {const fn attr_type_of_val<T: renderer::vertex::Attribute>(_: Option<&T>)
-                                -> renderer::vertex::format::AttributeType
+                    ty: {const fn attr_type_of_val<T: #crate_path::vertex::Attribute>(_: Option<&T>)
+                                -> #crate_path::vertex::format::AttributeType
                             {
-                                <T as renderer::vertex::Attribute>::TYPE
+                                <T as #crate_path::vertex::Attribute>::TYPE
                             }
                             attr_type_of_val(None::<&#ty>)
                     },
-                    offset: renderer::offset_of!(#ident, #field_name)
+                    offset: #crate_path::offset_of!(#ident, #field_name)
                }
             }
         })
@@ -193,13 +218,13 @@ fn vertex_binds(ident: Ident, fields: &[ShaderVar], layout_start: usize) -> Toke
 
     quote! {
         impl #ident {
-            const BINDINGS: renderer::vertex::format::VertexFormat = &[
+            const BINDINGS: #crate_path::vertex::format::VertexFormat = &[
                 #(#fields),*
             ];
         }
 
-        impl renderer::vertex::Vertex for #ident {
-            fn bindings() -> renderer::vertex::format::VertexFormat {
+        impl #crate_path::vertex::Vertex for #ident {
+            fn bindings() -> #crate_path::vertex::format::VertexFormat {
                 Self::BINDINGS
             }
         }

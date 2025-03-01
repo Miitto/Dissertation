@@ -138,7 +138,7 @@ shaders::program!(greedy_voxel, {
                 z = 1;
                 x = v_x * w;
                 y = (1-v_z) * h;
-                o.color = vec4(v_x, 0.0, 1.0, 1.0);
+                o.color = vec4(0.0, 0.0, 1.0, 1.0);
 
                 normal.z = 1.0;
                 break;

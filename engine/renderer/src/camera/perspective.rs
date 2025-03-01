@@ -3,7 +3,7 @@ use winit::keyboard::KeyCode;
 
 use crate::{Input, math::perspective};
 
-use super::Camera;
+use super::{Camera, frustum::Plane};
 
 #[derive(Debug)]
 pub struct PerspectiveCamera {
@@ -55,6 +55,10 @@ impl Camera for PerspectiveCamera {
 
     fn get_position(&self) -> Vec3 {
         self.position
+    }
+
+    fn get_rotation(&self) -> glam::Quat {
+        self.rotation.as_quat()
     }
 
     fn translate(&mut self, direction: crate::Dir, delta: f32) {
@@ -168,5 +172,58 @@ impl Camera for PerspectiveCamera {
             let mouse = input.mouse_pos();
             self.rotate(mouse.y(), mouse.x(), true);
         }
+    }
+
+    fn frustum(&self) -> crate::camera::frustum::Frustum {
+        // https://learnopengl.com/Guest-Articles/2021/Scene/Frustum-Culling
+
+        let half_v = self.far * (self.fov / 2.0).tan();
+        let half_h = half_v * self.aspect_ratio;
+
+        let cam_front = self.front();
+        let cam_right = self.right();
+        let cam_up = self.up();
+
+        let front_mul_far = self.far * cam_front;
+
+        let near = Plane::new(self.position + self.near * cam_front, cam_front);
+        let far = Plane::new(self.position + front_mul_far, -cam_front);
+
+        let right = Plane::new(
+            self.position,
+            (front_mul_far - cam_right * half_h).cross(cam_up),
+        );
+        let left = Plane::new(
+            self.position,
+            cam_up.cross(front_mul_far + cam_right * half_h),
+        );
+
+        let top = Plane::new(
+            self.position,
+            cam_right.cross(front_mul_far - cam_up * half_v),
+        );
+        let bottom = Plane::new(
+            self.position,
+            (front_mul_far + cam_up * half_v).cross(cam_right),
+        );
+
+        crate::camera::frustum::Frustum::new(top, bottom, left, right, near, far)
+    }
+}
+
+impl PerspectiveCamera {
+    fn front(&self) -> Vec3 {
+        let rotation = self.rotation.as_quat();
+        rotation * vec3(0., 0., 1.)
+    }
+
+    fn right(&self) -> Vec3 {
+        let rotation = self.rotation.as_quat();
+        rotation * vec3(1., 0., 0.)
+    }
+
+    fn up(&self) -> Vec3 {
+        let rotation = self.rotation.as_quat();
+        rotation * vec3(0., 1., 0.)
     }
 }

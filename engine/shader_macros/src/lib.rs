@@ -1,5 +1,5 @@
 #![feature(proc_macro_diagnostic, proc_macro_span)]
-use parse::{Delimited, delimited, meta::ProgramMeta};
+use parse::{Delimited, delimited, ident, meta::ProgramMeta, punct};
 use proc_macro::{Delimiter, Diagnostic, Level, TokenStream};
 use quote::{format_ident, quote};
 use shader_info::ShaderInfo;
@@ -36,12 +36,13 @@ pub fn program(input: TokenStream) -> TokenStream {
 
     let name = format_ident!("{}", meta.name.to_string());
 
-    let (_, Delimited { content, .. }) = if let Ok(content) = delimited(Delimiter::Brace)(content) {
-        content
-    } else {
-        Diagnostic::spanned(content[0].span(), Level::Error, "Expected block").emit();
-        return abandon(name);
-    };
+    let (rest, Delimited { content, .. }) =
+        if let Ok(content) = delimited(Delimiter::Brace)(content) {
+            content
+        } else {
+            Diagnostic::spanned(content[0].span(), Level::Error, "Expected block").emit();
+            return abandon(name);
+        };
 
     let (_, info) = match parse::glsl::parse_glsl(&content) {
         Ok(parsed) => parsed,
@@ -57,13 +58,17 @@ pub fn program(input: TokenStream) -> TokenStream {
         content: info,
     };
 
+    let use_crate = punct(',')(rest)
+        .and_then(|(rest, _)| ident("true")(rest))
+        .is_ok();
+
     let vertex_shader = build_glsl::vertex_shader(&input);
     let fragment_shader = build_glsl::fragment_shader(&input);
 
-    let vertex_struct = build_rust::vertex_struct(&input);
-    let uniform_struct = build_rust::uniform_struct(&input);
+    let vertex_struct = build_rust::vertex_struct(&input, use_crate);
+    let uniform_struct = build_rust::uniform_struct(&input, use_crate);
 
-    let program_impl = build_rust::program(&vertex_shader, &fragment_shader, None);
+    let program_impl = build_rust::program(&vertex_shader, &fragment_shader, None, use_crate);
 
     let name = format_ident!("{}", input.meta.name.to_string());
 

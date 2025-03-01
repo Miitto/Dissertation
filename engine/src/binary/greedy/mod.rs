@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use chunk::Chunk;
 use glam::{mat4, vec3, vec4};
-use renderer::{DrawMode, DrawType, Renderable, State, buffers::Vao, draw};
+use renderer::{DrawMode, DrawType, Renderable, State, buffers::Vao, camera::frustum::AABB, draw};
 use voxel::{BlockType, greedy_voxel};
 
 use crate::{Args, tests::Scene};
@@ -12,8 +12,8 @@ use crate::{Args, tests::Scene};
 mod chunk;
 mod voxel;
 
-pub fn setup(args: &Args, state: &State) -> ChunkManager {
-    let mut manager = ChunkManager::new(state);
+pub fn setup(args: &Args, _state: &State) -> ChunkManager {
+    let mut manager = ChunkManager::new(args.frustum_cull);
 
     let scene = args.scene;
     let radius = args.radius;
@@ -80,11 +80,12 @@ pub fn setup(args: &Args, state: &State) -> ChunkManager {
 
 pub struct ChunkManager {
     chunks: HashMap<[i32; 3], chunk::Chunk>,
-    plane_vao: Vao<greedy_voxel::Vertex, greedy_voxel::Instance>,
+    frustum_cull: bool,
+    plane_vao: Vao<greedy_voxel::Vertex>,
 }
 
 impl ChunkManager {
-    pub fn new(_state: &State) -> Self {
+    pub fn new(frustum_cull: bool) -> Self {
         let vertices = [
             greedy_voxel::Vertex::new([0.0, 0.0, 0.0]),
             greedy_voxel::Vertex::new([1.0, 0.0, 0.0]),
@@ -92,16 +93,11 @@ impl ChunkManager {
             greedy_voxel::Vertex::new([1.0, 0.0, 1.0]),
         ];
 
-        let vao = Vao::new(
-            &vertices,
-            None,
-            DrawType::Static,
-            DrawMode::TriangleStrip,
-            None as Option<&[greedy_voxel::Instance]>,
-        );
+        let vao = Vao::new(&vertices, None, DrawType::Static, DrawMode::TriangleStrip);
 
         Self {
             chunks: HashMap::new(),
+            frustum_cull,
             plane_vao: vao,
         }
     }
@@ -114,6 +110,16 @@ impl Renderable for ChunkManager {
         let forward = vec4(0., 0., -1., 0.0);
 
         for (pos, chunk) in &self.chunks {
+            if self.frustum_cull {
+                let frustum = state.cameras.game_frustum();
+
+                let pos = vec3(pos[0] as f32, pos[1] as f32, pos[2] as f32);
+                let end_pos = pos + 32.0;
+                if frustum.test_aabb(AABB::from_points(pos, end_pos)) {
+                    continue;
+                }
+            }
+
             let model_matrix = mat4(
                 right,
                 up,
@@ -132,8 +138,8 @@ impl Renderable for ChunkManager {
 
             let uniforms = greedy_voxel::Uniforms {
                 modelMatrix: model_matrix.to_cols_array_2d(),
-                viewMatrix: state.camera.get_view().to_cols_array_2d(),
-                projectionMatrix: state.camera.get_projection().to_cols_array_2d(),
+                viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
+                projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
                 sky_light_color: vec4(1.0, 1.0, 1.0, 1.0).to_array(),
                 sky_light_direction: vec3(-1.0, -1.0, -1.0).normalize().to_array(),
                 ambient_light: 0.5,

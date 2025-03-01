@@ -1,7 +1,6 @@
 use std::ffi::CString;
 
 use render_common::Program;
-pub use render_common::UniformValue;
 
 pub trait Uniforms {
     fn bind(&self, program: &Program);
