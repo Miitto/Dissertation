@@ -3,7 +3,10 @@ use winit::keyboard::KeyCode;
 
 use crate::{Input, math::perspective};
 
-use super::{Camera, frustum::Plane};
+use super::{
+    Camera,
+    frustum::{FrustumCorners, Plane},
+};
 
 #[derive(Debug)]
 pub struct PerspectiveCamera {
@@ -63,26 +66,25 @@ impl Camera for PerspectiveCamera {
 
     fn translate(&mut self, direction: crate::Dir, delta: f32) {
         let movement = delta * self.speed;
-        let rotation = self.rotation.as_quat();
 
         let up = vec3(0., 1., 0.);
-        let look_at = rotation * vec3(0., 0., 1.);
+        let look_at = self.front();
         let forward = vec3(look_at.x, 0., look_at.z).normalize();
         let right = up.cross(forward).normalize();
 
         use crate::Dir::*;
         match direction {
             Forward => {
-                self.position -= forward * movement;
-            }
-            Backward => {
                 self.position += forward * movement;
             }
+            Backward => {
+                self.position -= forward * movement;
+            }
             Left => {
-                self.position -= right * movement;
+                self.position += right * movement;
             }
             Right => {
-                self.position += right * movement;
+                self.position -= right * movement;
             }
             // Fix to Z axis for vertical move
             Up => {
@@ -209,12 +211,60 @@ impl Camera for PerspectiveCamera {
 
         crate::camera::frustum::Frustum::new(top, bottom, left, right, near, far)
     }
+
+    fn get_frustum_corners(&self) -> FrustumCorners {
+        let front = self.front();
+        let up = self.up();
+        let right = self.right();
+
+        let fov = self.fov.to_radians();
+
+        let near_height = (fov / 2.0).tan() * self.near;
+        let near_width = near_height * self.aspect_ratio;
+
+        let far_height = (fov / 2.0).tan() * self.far;
+        let far_width = far_height * self.aspect_ratio;
+
+        let near_center = self.position + front * self.near;
+        let far_center = self.position + front * self.far;
+
+        let near_tb = up * near_height;
+        let near_lr = right * near_width;
+        let near_top = near_center + near_tb;
+        let near_bottom = near_center - near_tb;
+
+        let near_top_left = near_top - near_lr;
+        let near_top_right = near_top + near_lr;
+        let near_bottom_left = near_bottom - near_lr;
+        let near_bottom_right = near_bottom + near_lr;
+
+        let far_tb = up * far_height;
+        let far_lr = right * far_width;
+        let far_top = far_center + far_tb;
+        let far_bottom = far_center - far_tb;
+
+        let far_top_left = far_top - far_lr;
+        let far_top_right = far_top + far_lr;
+        let far_bottom_left = far_bottom - far_lr;
+        let far_bottom_right = far_bottom + far_lr;
+
+        FrustumCorners {
+            near_top_left,
+            near_top_right,
+            near_bottom_left,
+            near_bottom_right,
+            far_top_left,
+            far_top_right,
+            far_bottom_left,
+            far_bottom_right,
+        }
+    }
 }
 
 impl PerspectiveCamera {
     fn front(&self) -> Vec3 {
         let rotation = self.rotation.as_quat();
-        rotation * vec3(0., 0., 1.)
+        rotation * vec3(0., 0., -1.)
     }
 
     fn right(&self) -> Vec3 {

@@ -73,10 +73,12 @@ impl Frustum {
 
     pub fn test_aabb(&self, bb: AABB) -> bool {
         for plane in self.iter() {
-            for point in bb.iter() {
-                if plane.distance(point) > 0.0 {
-                    return false;
-                }
+            let r = bb.extents.x * plane.normal.x.abs()
+                + bb.extents.y * plane.normal.y.abs()
+                + bb.extents.z * plane.normal.z.abs();
+
+            if -r > plane.distance(bb.center) {
+                return false;
             }
         }
 
@@ -84,51 +86,48 @@ impl Frustum {
     }
 }
 
+pub struct FrustumCorners {
+    pub near_top_left: Vec3,
+    pub near_top_right: Vec3,
+    pub near_bottom_left: Vec3,
+    pub near_bottom_right: Vec3,
+    pub far_top_left: Vec3,
+    pub far_top_right: Vec3,
+    pub far_bottom_left: Vec3,
+    pub far_bottom_right: Vec3,
+}
+
 pub struct AABB {
-    fbl: Vec3,
-    btr: Vec3,
+    pub center: Vec3,
+    pub extents: Vec3,
 }
 
 impl AABB {
     pub fn from_points(fbl: Vec3, btr: Vec3) -> Self {
-        Self { fbl, btr }
-    }
+        let max_x = btr.x.max(fbl.x);
+        let min_x = btr.x.min(fbl.x);
 
-    pub fn min_x(&self) -> f32 {
-        self.fbl.x.min(self.btr.x)
-    }
+        let max_y = btr.y.max(fbl.y);
+        let min_y = btr.y.min(fbl.y);
 
-    pub fn max_x(&self) -> f32 {
-        self.fbl.x.max(self.btr.x)
-    }
+        let max_z = btr.z.max(fbl.z);
+        let min_z = btr.z.min(fbl.z);
 
-    pub fn min_y(&self) -> f32 {
-        self.fbl.y.min(self.btr.y)
-    }
+        let center = vec3(
+            (max_x + min_x) / 2.0,
+            (max_y + min_y) / 2.0,
+            (max_z + min_z) / 2.0,
+        );
 
-    pub fn max_y(&self) -> f32 {
-        self.fbl.y.max(self.btr.y)
-    }
+        let extends = vec3(
+            (max_x - min_x) / 2.0,
+            (max_y - min_y) / 2.0,
+            (max_z - min_z) / 2.0,
+        );
 
-    pub fn min_z(&self) -> f32 {
-        self.fbl.z.min(self.btr.z)
-    }
-
-    pub fn max_z(&self) -> f32 {
-        self.fbl.z.max(self.btr.z)
-    }
-
-    pub fn iter(&self) -> impl Iterator<Item = Vec3> {
-        [
-            vec3(self.min_x(), self.min_y(), self.min_z()),
-            vec3(self.max_x(), self.min_y(), self.min_z()),
-            vec3(self.min_x(), self.max_y(), self.min_z()),
-            vec3(self.max_x(), self.max_y(), self.min_z()),
-            vec3(self.min_x(), self.min_y(), self.max_z()),
-            vec3(self.max_x(), self.min_y(), self.max_z()),
-            vec3(self.min_x(), self.max_y(), self.max_z()),
-            vec3(self.max_x(), self.max_y(), self.max_z()),
-        ]
-        .into_iter()
+        AABB {
+            center,
+            extents: extends,
+        }
     }
 }

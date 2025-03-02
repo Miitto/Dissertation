@@ -29,6 +29,7 @@ impl ShaderInfo {
         }
 
         let primative = match ident.to_string().as_str() {
+            "void" => Some(ShaderType::Primative(ShaderPrimatives::Void)),
             "int" => Some(ShaderType::Primative(ShaderPrimatives::Int)),
             "uint" => Some(ShaderType::Primative(ShaderPrimatives::UInt)),
             "float" => Some(ShaderType::Primative(ShaderPrimatives::Float)),

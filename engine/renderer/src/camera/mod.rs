@@ -1,5 +1,6 @@
-use crate::{Dir, DrawMode, DrawType, Input, State, buffers::Vao};
-use glam::{Mat4, Vec3, vec4};
+use crate::{Dir, DrawMode, DrawType, Input, State, buffers::Vao, draw::line::Line};
+use frustum::FrustumCorners;
+use glam::{Mat4, Vec3, vec3, vec4};
 
 pub mod frustum;
 mod perspective;
@@ -18,6 +19,7 @@ pub trait Camera: std::fmt::Debug {
     fn rotate(&mut self, pitch_delta: f64, yaw_delta: f64, is_mouse: bool);
     fn handle_input(&mut self, keys: &Input, delta: f32);
     fn frustum(&self) -> frustum::Frustum;
+    fn get_frustum_corners(&self) -> FrustumCorners;
 }
 
 pub struct CameraManager {
@@ -81,6 +83,11 @@ impl CameraManager {
             return;
         }
 
+        self.render_other_cameras();
+        self.render_game_frustum();
+    }
+
+    fn render_other_cameras(&self) {
         let projection = self.active().get_projection().to_cols_array_2d();
         let view = self.active().get_view().to_cols_array_2d();
 
@@ -160,6 +167,41 @@ impl CameraManager {
 
             crate::draw::draw(&vao, &program, &uniforms);
         }
+    }
+
+    fn render_game_frustum(&self) {
+        let game = self.game();
+        let corners = game.get_frustum_corners();
+
+        let color = vec3(1., 1., 1.);
+
+        let lines: Vec<crate::draw::line::Vertex> = [
+            Line::new(corners.near_top_left, corners.near_top_right, color),
+            Line::new(corners.near_top_right, corners.near_bottom_right, color),
+            Line::new(corners.near_bottom_right, corners.near_bottom_left, color),
+            Line::new(corners.near_bottom_left, corners.near_top_left, color),
+            Line::new(corners.far_top_left, corners.far_top_right, color),
+            Line::new(corners.far_top_right, corners.far_bottom_right, color),
+            Line::new(corners.far_bottom_right, corners.far_bottom_left, color),
+            Line::new(corners.far_bottom_left, corners.far_top_left, color),
+            Line::new(corners.near_top_left, corners.far_top_left, color),
+            Line::new(corners.near_top_right, corners.far_top_right, color),
+            Line::new(corners.near_bottom_right, corners.far_bottom_right, color),
+            Line::new(corners.near_bottom_left, corners.far_bottom_left, color),
+        ]
+        .iter()
+        .flat_map(|l| l.to_vertices())
+        .collect();
+
+        let vao = crate::buffers::Vao::new(&lines, None, DrawType::Static, DrawMode::Lines);
+        let program = crate::draw::line::Program::get();
+
+        let uniforms = crate::draw::line::Uniforms {
+            projectionMatrix: self.active().get_projection().to_cols_array_2d(),
+            viewMatrix: self.active().get_view().to_cols_array_2d(),
+        };
+
+        crate::draw::draw(&vao, &program, &uniforms);
     }
 }
 

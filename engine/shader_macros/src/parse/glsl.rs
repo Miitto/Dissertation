@@ -326,13 +326,24 @@ fn parse_var<'a>(
 
     let (input, type_name) = ident_any(input).map_err(|_| {
         Diagnostic::spanned(
-            input[0].span(),
+            input
+                .first()
+                .expect("Input should of had at least one element")
+                .span(),
             Level::Error,
             format!("Expected type, got {}", input[0]),
         )
     })?;
-    let (input, name) = ident_any(input)
-        .map_err(|_| Diagnostic::spanned(input[0].span(), Level::Error, "Expected field name"))?;
+    let (input, name) = ident_any(input).map_err(|_| {
+        Diagnostic::spanned(
+            input
+                .first()
+                .expect("Input should of at least had one element")
+                .span(),
+            Level::Error,
+            "Expected field name",
+        )
+    })?;
 
     if let Ok(type_found) = info.get_type(type_name, &[], false) {
         let var = ShaderVar {
@@ -373,7 +384,14 @@ fn parse_function<'a>(
     while !params_content.is_empty() {
         if !first {
             let (rest, _) = punct(',')(params_content).map_err(|_| {
-                Diagnostic::spanned(params_content[0].span(), Level::Error, "Expected ,")
+                Diagnostic::spanned(
+                    params_content
+                        .first()
+                        .expect("Content should of had at least one element")
+                        .span(),
+                    Level::Error,
+                    "Expected ,",
+                )
             })?;
             params_content = rest;
         } else {

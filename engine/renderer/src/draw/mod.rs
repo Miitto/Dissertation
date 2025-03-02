@@ -1,12 +1,12 @@
-use render_common::Program;
+use render_common::Program as P;
+pub mod line;
+use crate::{Uniforms as UniformsTrait, buffers::Vao, vertex::Vertex as VertexTrait};
 
-use crate::{Uniforms, buffers::Vao, vertex::Vertex};
-
-pub fn draw<T, I, U>(vao: &Vao<T, I>, program: &Program, uniforms: &U)
+pub fn draw<T, I, U>(vao: &Vao<T, I>, program: &P, uniforms: &U)
 where
-    T: Vertex,
-    I: Vertex,
-    U: Uniforms,
+    T: VertexTrait,
+    I: VertexTrait,
+    U: UniformsTrait,
 {
     program.bind();
     vao.bind();

@@ -167,6 +167,7 @@ impl std::ops::Sub for ShaderType {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderPrimatives {
+    Void,
     Bool,
     Int,
     UInt,
@@ -177,6 +178,7 @@ pub enum ShaderPrimatives {
 impl ToTokens for ShaderPrimatives {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
+            ShaderPrimatives::Void => tokens.extend(quote! {()}),
             ShaderPrimatives::Bool => tokens.extend(quote! {bool}),
             ShaderPrimatives::Int => tokens.extend(quote! {i32}),
             ShaderPrimatives::UInt => tokens.extend(quote! {u32}),
@@ -188,13 +190,18 @@ impl ToTokens for ShaderPrimatives {
 
 impl Display for ShaderPrimatives {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", match self {
-            ShaderPrimatives::Bool => "bool",
-            ShaderPrimatives::Int => "int",
-            ShaderPrimatives::UInt => "uint",
-            ShaderPrimatives::Float => "float",
-            ShaderPrimatives::Double => "double",
-        })
+        write!(
+            f,
+            "{}",
+            match self {
+                ShaderPrimatives::Void => "void",
+                ShaderPrimatives::Bool => "bool",
+                ShaderPrimatives::Int => "int",
+                ShaderPrimatives::UInt => "uint",
+                ShaderPrimatives::Float => "float",
+                ShaderPrimatives::Double => "double",
+            }
+        )
     }
 }
 

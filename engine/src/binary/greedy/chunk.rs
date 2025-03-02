@@ -3,7 +3,7 @@ use std::{
     rc::Rc,
 };
 
-use renderer::{Dir, DrawType, buffers::Vbo, camera::frustum::Frustum};
+use renderer::{Dir, DrawType, buffers::Vbo};
 
 use crate::{
     binary::common::{greedy_faces, make_culled_faces},

@@ -1,5 +1,3 @@
-use std::{fs::OpenOptions, io::Write};
-
 use proc_macro::{Diagnostic, Level};
 
 use crate::{
@@ -130,37 +128,45 @@ pub fn vertex_shader(
         (String::default(), String::default())
     };
 
-    let vertex_out_struct = match &vertex_fn.var.t {
-        ShaderType::Object(ShaderObjects::Custom(s)) => s,
+    let (out_vars, struct_to_out_assign) = match &vertex_fn.var.t {
+        ShaderType::Object(ShaderObjects::Custom(vertex_out_struct)) => {
+            let out_vars = vertex_out_struct
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(idx, f)| {
+                    format!(
+                        "layout(location = {}) out {} {}_{};",
+                        idx, f.t, vertex_out_struct.name, f.name
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n");
+
+            let struct_to_out_assign = vertex_out_struct
+                .fields
+                .iter()
+                .map(|f| {
+                    format!(
+                        "{}_{} = vertex_output.{};",
+                        vertex_out_struct.name, f.name, f.name
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n");
+
+            (out_vars, struct_to_out_assign)
+        }
+        ShaderType::Primative(crate::shader_var::ShaderPrimatives::Void) => {
+            (String::default(), String::default())
+        }
         _ => {
-            panic!("Fragment function must take a struct as input");
+            panic!(
+                "Vertex function must return void or a struct, got {:?}",
+                vertex_fn.var.t
+            );
         }
     };
-
-    let out_vars = vertex_out_struct
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(idx, f)| {
-            format!(
-                "layout(location = {}) out {} {}_{};",
-                idx, f.t, vertex_out_struct.name, f.name
-            )
-        })
-        .collect::<Vec<String>>()
-        .join("\n");
-
-    let struct_to_out_assign = vertex_out_struct
-        .fields
-        .iter()
-        .map(|f| {
-            format!(
-                "{}_{} = vertex_output.{};",
-                vertex_out_struct.name, f.name, f.name
-            )
-        })
-        .collect::<Vec<String>>()
-        .join("\n");
 
     let content = format!(
         r#"#version {}
@@ -226,39 +232,52 @@ pub fn fragment_shader(
         return "".to_string();
     };
 
-    let frag_input = match &frag_fn.params[0].t {
-        ShaderType::Object(ShaderObjects::Custom(s)) => s,
-        _ => {
-            panic!("Fragment function must take a struct as input");
-        }
-    };
-
-    let in_vars = frag_input
-        .fields
-        .iter()
-        .enumerate()
-        .map(|(idx, f)| {
-            format!(
-                "layout(location = {}) in {} {}_{};",
-                idx, f.t, frag_input.name, f.name
-            )
-        })
-        .collect::<Vec<String>>()
-        .join("\n");
-
-    let in_to_struct_assign = frag_input
-        .fields
-        .iter()
+    let (in_vars, in_to_struct) = &frag_fn
+        .params
+        .first()
         .map(|f| {
-            format!(
-                "    frag_input.{} = {}_{};",
-                f.name, frag_input.name, f.name
-            )
-        })
-        .collect::<Vec<String>>()
-        .join("\n");
+            let frag_input = &f.t;
 
-    let in_to_struct = format!("{} frag_input;\n{}", frag_input.name, in_to_struct_assign);
+            let frag_input = match frag_input {
+                ShaderType::Object(ShaderObjects::Custom(s)) => s,
+                _ => {
+                    panic!(
+                        "Fragment function must take a struct as input, got {:?}",
+                        frag_input
+                    );
+                }
+            };
+
+            let in_vars = frag_input
+                .fields
+                .iter()
+                .enumerate()
+                .map(|(idx, f)| {
+                    format!(
+                        "layout(location = {}) in {} {}_{};",
+                        idx, f.t, frag_input.name, f.name
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n");
+
+            let in_to_struct_assign = frag_input
+                .fields
+                .iter()
+                .map(|f| {
+                    format!(
+                        "    frag_input.{} = {}_{};",
+                        f.name, frag_input.name, f.name
+                    )
+                })
+                .collect::<Vec<String>>()
+                .join("\n");
+
+            let in_to_struct = format!("{} frag_input;\n{}", frag_input.name, in_to_struct_assign);
+
+            (in_vars, in_to_struct)
+        })
+        .unwrap_or((String::default(), String::default()));
 
     let out_var_type = frag_fn.var.t.to_string();
 

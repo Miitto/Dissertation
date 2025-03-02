@@ -115,7 +115,7 @@ impl Renderable for ChunkManager {
 
                 let pos = vec3(pos[0] as f32, pos[1] as f32, pos[2] as f32);
                 let end_pos = pos + 32.0;
-                if frustum.test_aabb(AABB::from_points(pos, end_pos)) {
+                if !frustum.test_aabb(AABB::from_points(pos, end_pos)) {
                     continue;
                 }
             }
