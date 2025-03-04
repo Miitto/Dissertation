@@ -8,20 +8,20 @@ use winit::{
 
 #[derive(Clone, Debug, Default)]
 pub struct PositionDelta {
-    x: f64,
-    y: f64,
+    x: f32,
+    y: f32,
 }
 
 impl PositionDelta {
-    pub fn new(x: f64, y: f64) -> Self {
+    pub fn new(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
-    pub fn x(&self) -> f64 {
+    pub fn x(&self) -> f32 {
         self.x
     }
 
-    pub fn y(&self) -> f64 {
+    pub fn y(&self) -> f32 {
         self.y
     }
 }
@@ -61,7 +61,7 @@ impl Input {
         &self.mouse.position
     }
 
-    pub fn mouse_move(&mut self, x: f64, y: f64) {
+    pub fn mouse_move(&mut self, x: f32, y: f32) {
         self.mouse.position = PositionDelta::new(x, y);
     }
 

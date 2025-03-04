@@ -28,6 +28,8 @@ pub mod draw;
 pub use ::shaders::{ProgramInternal, program};
 pub use memoffset::offset_of;
 pub use uniforms::*;
+mod transform;
+pub use transform::Transform;
 
 pub fn make_event_loop() -> EventLoop<()> {
     let event_loop = EventLoop::new().expect("Failed to create event loop");

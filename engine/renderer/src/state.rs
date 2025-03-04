@@ -79,7 +79,7 @@ impl State {
         self.input.mouse_pos()
     }
 
-    pub fn mouse_move(&mut self, x: f64, y: f64) {
+    pub fn mouse_move(&mut self, x: f32, y: f32) {
         self.input.mouse_move(x, y);
     }
 

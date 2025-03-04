@@ -1,5 +1,5 @@
 use crate::{
-    Dir, DrawMode, DrawType, Input, State, bounds::BoundingHeirarchy, buffers::Vao,
+    Dir, DrawMode, DrawType, Input, State, Transform, bounds::BoundingHeirarchy, buffers::Vao,
     draw::line::Line, mesh::Mesh,
 };
 use frustum::FrustumCorners;
@@ -16,10 +16,9 @@ pub trait Camera: std::fmt::Debug {
     fn on_window_resize(&mut self, width: f32, height: f32);
     fn get_projection(&self) -> Mat4;
     fn get_view(&self) -> Mat4;
-    fn get_position(&self) -> Vec3;
-    fn get_rotation(&self) -> glam::Quat;
+    fn transform(&self) -> &Transform;
     fn translate(&mut self, direction: Dir, delta: f32);
-    fn rotate(&mut self, pitch_delta: f64, yaw_delta: f64, is_mouse: bool);
+    fn rotate(&mut self, pitch_delta: f32, yaw_delta: f32, is_mouse: bool);
     fn handle_input(&mut self, keys: &Input, delta: f32);
     fn frustum(&self) -> frustum::Frustum;
     fn get_frustum_corners(&self) -> FrustumCorners;
@@ -142,8 +141,8 @@ impl CameraManager {
             DrawType::Static,
         );
 
-        let pos = self.game().get_position();
-        let model_mat = Mat4::from_rotation_translation(self.game().get_rotation(), pos);
+        let pos = self.game().transform().position;
+        let model_mat = Mat4::from_rotation_translation(self.game().transform().rotation, pos);
 
         let scaled = model_mat * Mat4::from_scale(Vec3::splat(0.1));
 
@@ -158,8 +157,7 @@ impl CameraManager {
         crate::draw::draw(&mesh, &program, &uniforms, state);
 
         for inactive in self.inactive() {
-            let pos = inactive.get_position();
-            let model_mat = Mat4::from_rotation_translation(inactive.get_rotation(), pos);
+            let model_mat = inactive.transform().to_mat4();
 
             let scaled = model_mat * Mat4::from_scale(Vec3::splat(0.1));
 

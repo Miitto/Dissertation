@@ -95,7 +95,7 @@ impl ApplicationHandler for App {
                 if delta.0 == 0.0 && delta.1 == 0.0 {
                     return;
                 }
-                self.state.mouse_move(delta.0, delta.1);
+                self.state.mouse_move(delta.0 as f32, delta.1 as f32);
             }
             DeviceEvent::MouseWheel { delta } => match delta {
                 MouseScrollDelta::LineDelta(_, y) => {
@@ -118,8 +118,6 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(window_size) => {
-                // TODO: GL Surface resize
-
                 self.state
                     .cameras
                     .on_window_resize(window_size.width as f32, window_size.height as f32);
