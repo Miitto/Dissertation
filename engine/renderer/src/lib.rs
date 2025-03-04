@@ -1,29 +1,33 @@
 #![feature(duration_millis_float)]
-pub mod buffers;
-pub mod camera;
-mod input;
-pub mod math;
-mod state;
-pub mod vertex;
-use std::{ffi::CString, num::NonZeroU32};
-
-use glutin_winit::DisplayBuilder;
-pub use input::{Input, PositionDelta};
-pub use render_common::*;
-pub use state::State;
-mod enums;
-pub use enums::*;
-pub mod draw;
-mod uniforms;
-pub use ::shaders::{ProgramInternal, program};
-pub use memoffset::offset_of;
-pub use uniforms::*;
 
 use glutin::{config::ConfigTemplateBuilder, display::GetGlDisplay, surface::GlSurface};
+use glutin_winit::DisplayBuilder;
+use std::{ffi::CString, num::NonZeroU32};
 use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::Window,
 };
+
+mod enums;
+mod input;
+mod state;
+mod uniforms;
+
+pub mod bounds;
+pub mod buffers;
+pub mod camera;
+pub mod math;
+pub mod mesh;
+pub mod vertex;
+
+pub use enums::*;
+pub use input::{Input, PositionDelta};
+pub use render_common::*;
+pub use state::State;
+pub mod draw;
+pub use ::shaders::{ProgramInternal, program};
+pub use memoffset::offset_of;
+pub use uniforms::*;
 
 pub fn make_event_loop() -> EventLoop<()> {
     let event_loop = EventLoop::new().expect("Failed to create event loop");

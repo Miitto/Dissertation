@@ -67,10 +67,9 @@ impl Camera for PerspectiveCamera {
     fn translate(&mut self, direction: crate::Dir, delta: f32) {
         let movement = delta * self.speed;
 
-        let up = vec3(0., 1., 0.);
         let look_at = self.front();
         let forward = vec3(look_at.x, 0., look_at.z).normalize();
-        let right = up.cross(forward).normalize();
+        let right = self.right();
 
         use crate::Dir::*;
         match direction {
@@ -81,10 +80,10 @@ impl Camera for PerspectiveCamera {
                 self.position -= forward * movement;
             }
             Left => {
-                self.position += right * movement;
+                self.position -= right * movement;
             }
             Right => {
-                self.position -= right * movement;
+                self.position += right * movement;
             }
             // Fix to Z axis for vertical move
             Up => {
@@ -179,7 +178,7 @@ impl Camera for PerspectiveCamera {
     fn frustum(&self) -> crate::camera::frustum::Frustum {
         // https://learnopengl.com/Guest-Articles/2021/Scene/Frustum-Culling
 
-        let half_v = self.far * (self.fov / 2.0).tan();
+        let half_v = self.far * (self.fov.to_radians() / 2.0).tan();
         let half_h = half_v * self.aspect_ratio;
 
         let cam_front = self.front();
@@ -258,6 +257,10 @@ impl Camera for PerspectiveCamera {
             far_bottom_left,
             far_bottom_right,
         }
+    }
+
+    fn forward(&self) -> Vec3 {
+        self.front()
     }
 }
 

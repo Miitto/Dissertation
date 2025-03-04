@@ -1,4 +1,7 @@
-use crate::{Dir, DrawMode, DrawType, Input, State, buffers::Vao, draw::line::Line};
+use crate::{
+    Dir, DrawMode, DrawType, Input, State, bounds::BoundingHeirarchy, buffers::Vao,
+    draw::line::Line, mesh::Mesh,
+};
 use frustum::FrustumCorners;
 use glam::{Mat4, Vec3, vec3, vec4};
 
@@ -20,6 +23,7 @@ pub trait Camera: std::fmt::Debug {
     fn handle_input(&mut self, keys: &Input, delta: f32);
     fn frustum(&self) -> frustum::Frustum;
     fn get_frustum_corners(&self) -> FrustumCorners;
+    fn forward(&self) -> Vec3;
 }
 
 pub struct CameraManager {
@@ -83,11 +87,11 @@ impl CameraManager {
             return;
         }
 
-        self.render_other_cameras();
-        self.render_game_frustum();
+        self.render_other_cameras(state);
+        self.render_game_frustum(state);
     }
 
-    fn render_other_cameras(&self) {
+    fn render_other_cameras(&self, state: &State) {
         let projection = self.active().get_projection().to_cols_array_2d();
         let view = self.active().get_view().to_cols_array_2d();
 
@@ -118,9 +122,9 @@ impl CameraManager {
         // 7
         let bbr = camera_gizmo::Vertex { pos: [1., 0., 2.] };
 
-        let vertices = [fbl, ftl, ftr, fbr, bbl, btl, btr, bbr];
+        let vertices = vec![fbl, ftl, ftr, fbr, bbl, btl, btr, bbr];
 
-        let indices = [
+        let indices = vec![
             0, 1, 2, 2, 3, 0, // Front
             7, 6, 5, 5, 4, 7, // Back
             4, 5, 1, 1, 0, 4, // Left
@@ -129,11 +133,13 @@ impl CameraManager {
             4, 0, 3, 3, 7, 4, // Bottom
         ];
 
-        let vao = Vao::new(
-            &vertices,
-            Some(&indices),
-            DrawType::Static,
+        let mesh = Mesh::new(
+            vertices,
+            Some(indices),
+            // Default bounds as this shouldn't be drawn with any camera that is culling
+            BoundingHeirarchy::default(),
             DrawMode::Triangles,
+            DrawType::Static,
         );
 
         let pos = self.game().get_position();
@@ -149,7 +155,7 @@ impl CameraManager {
             color: vec4(1., 1., 1., 1.0).to_array(),
         };
 
-        crate::draw::draw(&vao, &program, &uniforms);
+        crate::draw::draw(&mesh, &program, &uniforms, state);
 
         for inactive in self.inactive() {
             let pos = inactive.get_position();
@@ -165,11 +171,11 @@ impl CameraManager {
                 color: vec4(0.75, 0.75, 0.75, 1.0).to_array(),
             };
 
-            crate::draw::draw(&vao, &program, &uniforms);
+            crate::draw::draw(&mesh, &program, &uniforms, state);
         }
     }
 
-    fn render_game_frustum(&self) {
+    fn render_game_frustum(&self, state: &State) {
         let game = self.game();
         let corners = game.get_frustum_corners();
 
@@ -193,7 +199,13 @@ impl CameraManager {
         .flat_map(|l| l.to_vertices())
         .collect();
 
-        let vao = crate::buffers::Vao::new(&lines, None, DrawType::Static, DrawMode::Lines);
+        let mesh = crate::mesh::Mesh::new(
+            lines,
+            None,
+            BoundingHeirarchy::default(),
+            DrawMode::Lines,
+            DrawType::Static,
+        );
         let program = crate::draw::line::Program::get();
 
         let uniforms = crate::draw::line::Uniforms {
@@ -201,7 +213,7 @@ impl CameraManager {
             viewMatrix: self.active().get_view().to_cols_array_2d(),
         };
 
-        crate::draw::draw(&vao, &program, &uniforms);
+        crate::draw::draw(&mesh, &program, &uniforms, state);
     }
 }
 

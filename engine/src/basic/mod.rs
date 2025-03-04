@@ -1,4 +1,5 @@
-use renderer::{Renderable, State, buffers::Vao};
+use glam::vec3;
+use renderer::{Renderable, State, bounds::BoundingHeirarchy, buffers::Vao, mesh::Mesh};
 use shaders::Program;
 use voxel::{Voxel, instanced_voxel};
 
@@ -17,7 +18,7 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
     let mut renderables = Vec::new();
     match scene {
         Scene::Single => {
-            renderables.push(Voxel::new([0, 0, 0]));
+            renderables.push(Voxel::new(vec3(0.0, 0., 0.)));
         }
         Scene::Cube => {
             renderables.reserve_exact(32 * 32 * 32);
@@ -25,7 +26,7 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
             for x in 0..32 {
                 for y in 0..32 {
                     for z in 0..32 {
-                        renderables.push(Voxel::new([x, y, z]));
+                        renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
                     }
                 }
             }
@@ -36,7 +37,7 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
             for x in 0..radius as i32 {
                 for z in 0..radius as i32 {
                     for y in 0..height as i32 {
-                        renderables.push(Voxel::new([x, y, z]));
+                        renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
                     }
                 }
             }
@@ -54,7 +55,7 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
                 for z in 0..radius as i32 {
                     let height = (noise.get_noise(x as f32, z as f32) * (height as f32)) as i32;
                     for y in 0..height {
-                        renderables.push(Voxel::new([x, y, z]));
+                        renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
                     }
                 }
             }
@@ -88,15 +89,52 @@ impl Renderable for VoxelManager {
         let indices = Voxel::get_indices();
 
         let instances = self.voxels.iter().map(|v| instanced_voxel::Instance {
-            pos: v.get_position(),
+            pos: v.get_position().to_array(),
         });
 
-        let vao = Vao::new_instanced(
-            &vertices,
-            Some(&indices),
-            renderer::DrawType::Static,
+        let min_x = self
+            .voxels
+            .iter()
+            .map(|v| v.get_position().x)
+            .fold(f32::INFINITY, f32::min);
+        let max_x = self
+            .voxels
+            .iter()
+            .map(|v| v.get_position().x)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let min_y = self
+            .voxels
+            .iter()
+            .map(|v| v.get_position().y)
+            .fold(f32::INFINITY, f32::min);
+        let max_y = self
+            .voxels
+            .iter()
+            .map(|v| v.get_position().y)
+            .fold(f32::NEG_INFINITY, f32::max);
+        let min_z = self
+            .voxels
+            .iter()
+            .map(|v| v.get_position().z)
+            .fold(f32::INFINITY, f32::min);
+        let max_z = self
+            .voxels
+            .iter()
+            .map(|v| v.get_position().z)
+            .fold(f32::NEG_INFINITY, f32::max);
+
+        let min_coord = vec3(min_x, min_y, min_z);
+        let max_coord = vec3(max_x, max_y, max_z);
+
+        let bounds = BoundingHeirarchy::from_min_max(min_coord, max_coord);
+
+        let mesh = Mesh::new_instance(
+            vertices,
+            Some(indices),
+            instances.collect::<Vec<_>>(),
+            bounds,
             renderer::DrawMode::Triangles,
-            &instances.collect::<Vec<_>>(),
+            renderer::DrawType::Static,
         );
 
         let program = instanced_voxel::Program::get();
@@ -106,6 +144,6 @@ impl Renderable for VoxelManager {
             projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
         };
 
-        renderer::draw::draw(&vao, &program, &uniforms);
+        renderer::draw::draw(&mesh, &program, &uniforms, state);
     }
 }

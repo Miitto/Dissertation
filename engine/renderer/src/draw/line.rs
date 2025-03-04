@@ -3,12 +3,27 @@ use shaders::Program as _;
 
 pub use line::{Program, Uniforms, Vertex};
 
-use crate::Renderable;
+use crate::{
+    Renderable,
+    bounds::{AABB, BoundingHeirarchy, BoundingSphere},
+};
 
 pub struct Line {
     start: Vec3,
     end: Vec3,
     color: Vec3,
+}
+
+impl From<&Line> for BoundingHeirarchy {
+    fn from(value: &Line) -> Self {
+        let center = value.center();
+        let radius = value.length() / 2.0;
+
+        BoundingHeirarchy::new(
+            BoundingSphere::new(center, radius),
+            AABB::new(center, Vec3::splat(radius)),
+        )
+    }
 }
 
 impl Line {
@@ -29,6 +44,14 @@ impl Line {
             })
             .collect()
     }
+
+    pub fn center(&self) -> Vec3 {
+        (self.start + self.end) / 2.0
+    }
+
+    pub fn length(&self) -> f32 {
+        (self.start - self.end).length()
+    }
 }
 
 impl Renderable for Line {
@@ -40,16 +63,19 @@ impl Renderable for Line {
 
         let vertices = self.to_vertices();
 
-        let vao = crate::buffers::Vao::new(
-            &vertices,
+        let bounds = self.into();
+
+        let vao = crate::mesh::Mesh::new(
+            vertices,
             None,
-            crate::DrawType::Static,
+            bounds,
             crate::DrawMode::Lines,
+            crate::DrawType::Static,
         );
 
         let program = line::Program::get();
 
-        crate::draw::draw(&vao, &program, &uniforms);
+        crate::draw::draw(&vao, &program, &uniforms, state);
     }
 }
 

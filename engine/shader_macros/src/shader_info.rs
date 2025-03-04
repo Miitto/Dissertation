@@ -44,8 +44,11 @@ impl ShaderInfo {
 
         let object = match ident.to_string().as_str() {
             "vec2" => Some(ShaderType::Object(ShaderObjects::Vec2)),
+            "ivec2" => Some(ShaderType::Object(ShaderObjects::IVec2)),
             "vec3" => Some(ShaderType::Object(ShaderObjects::Vec3)),
+            "ivec3" => Some(ShaderType::Object(ShaderObjects::IVec3)),
             "vec4" => Some(ShaderType::Object(ShaderObjects::Vec4)),
+            "ivec4" => Some(ShaderType::Object(ShaderObjects::IVec4)),
             "mat2" => Some(ShaderType::Object(ShaderObjects::Mat2)),
             "mat3" => Some(ShaderType::Object(ShaderObjects::Mat3)),
             "mat4" => Some(ShaderType::Object(ShaderObjects::Mat4)),

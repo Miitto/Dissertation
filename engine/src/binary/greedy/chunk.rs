@@ -16,8 +16,7 @@ const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
     voxels: Box<[[[voxel::Voxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    instances: RefCell<Option<Vec<greedy_voxel::Instance>>>,
-    cached: RefCell<Option<Rc<Vbo<greedy_voxel::Instance>>>>,
+    instances: RefCell<Option<Rc<Vec<greedy_voxel::Instance>>>>,
 }
 
 impl Chunk {
@@ -39,7 +38,6 @@ impl Chunk {
         Self {
             voxels,
             instances: RefCell::new(None),
-            cached: RefCell::new(None),
         }
     }
 
@@ -59,12 +57,11 @@ impl Chunk {
 
     fn invalidate(&self) {
         *self.instances.borrow_mut() = None;
-        *self.cached.borrow_mut() = None;
     }
 
-    pub fn instance_positions(&self) -> Ref<'_, Vec<greedy_voxel::Instance>> {
+    pub fn instance_positions(&self) -> Rc<Vec<greedy_voxel::Instance>> {
         if self.instances.borrow().is_some() {
-            return Ref::map(self.instances.borrow(), |o| o.as_ref().unwrap());
+            return self.instances.borrow().as_ref().unwrap().clone();
         }
 
         let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].is_solid();
@@ -84,24 +81,8 @@ impl Chunk {
             }
         }
 
-        *self.instances.borrow_mut() = Some(instances);
+        *self.instances.borrow_mut() = Some(Rc::new(instances));
 
         self.instance_positions()
-    }
-
-    pub fn get_instances(&self) -> Rc<Vbo<greedy_voxel::Instance>> {
-        if self.cached.borrow().is_some() {
-            self.cached.borrow().as_ref().unwrap().clone()
-        } else {
-            let vbo = {
-                let instances = self.instance_positions();
-
-                Vbo::new(instances.as_slice(), DrawType::Static, true)
-            };
-
-            *self.cached.borrow_mut() = Some(Rc::new(vbo));
-
-            self.cached.borrow().as_ref().unwrap().clone()
-        }
     }
 }

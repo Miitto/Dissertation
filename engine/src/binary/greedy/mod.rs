@@ -1,10 +1,13 @@
 use bracket_noise::prelude::*;
 use shaders::Program;
-use std::collections::HashMap;
+use std::{cell::RefCell, collections::HashMap};
 
 use chunk::Chunk;
-use glam::{mat4, vec3, vec4};
-use renderer::{DrawMode, DrawType, Renderable, State, buffers::Vao, camera::frustum::AABB, draw};
+use glam::{ivec3, mat4, vec3, vec4};
+use renderer::{
+    DrawMode, DrawType, Renderable, State, bounds::BoundingHeirarchy, buffers::Vao, draw,
+    mesh::Mesh,
+};
 use voxel::{BlockType, greedy_voxel};
 
 use crate::{Args, tests::Scene};
@@ -81,63 +84,57 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
 pub struct ChunkManager {
     chunks: HashMap<[i32; 3], chunk::Chunk>,
     frustum_cull: bool,
-    plane_vao: Vao<greedy_voxel::Vertex>,
+    mesh: RefCell<Mesh<greedy_voxel::Vertex, greedy_voxel::Instance>>,
+    instance_needs_calculating: bool,
 }
 
 impl ChunkManager {
     pub fn new(frustum_cull: bool) -> Self {
-        let vertices = [
-            greedy_voxel::Vertex::new([0.0, 0.0, 0.0]),
-            greedy_voxel::Vertex::new([1.0, 0.0, 0.0]),
-            greedy_voxel::Vertex::new([0.0, 0.0, 1.0]),
-            greedy_voxel::Vertex::new([1.0, 0.0, 1.0]),
+        let vertices = vec![
+            greedy_voxel::Vertex::new([0, 0, 0]),
+            greedy_voxel::Vertex::new([1, 0, 0]),
+            greedy_voxel::Vertex::new([0, 0, 1]),
+            greedy_voxel::Vertex::new([1, 0, 1]),
         ];
 
-        let vao = Vao::new(&vertices, None, DrawType::Static, DrawMode::TriangleStrip);
+        let mut mesh = Mesh::new_instance(
+            vertices,
+            None,
+            vec![],
+            BoundingHeirarchy::default(),
+            DrawMode::TriangleStrip,
+            DrawType::Static,
+        );
+
+        mesh.set_frustum_cull(frustum_cull);
 
         Self {
             chunks: HashMap::new(),
             frustum_cull,
-            plane_vao: vao,
+            mesh: RefCell::new(mesh),
+            instance_needs_calculating: true,
         }
     }
 }
 
 impl Renderable for ChunkManager {
     fn render(&self, state: &mut renderer::State) {
-        let right = vec4(1., 0., 0., 0.0);
-        let up = vec4(0., 1., 0., 0.0);
-        let forward = vec4(0., 0., -1., 0.0);
-
         for (pos, chunk) in &self.chunks {
-            if self.frustum_cull {
-                let frustum = state.cameras.game_frustum();
+            let ipos = ivec3(pos[0], pos[1], pos[2]) * 32;
 
-                let pos = vec3(pos[0] as f32, pos[1] as f32, pos[2] as f32);
-                let end_pos = pos + 32.0;
-                if !frustum.test_aabb(AABB::from_points(pos, end_pos)) {
-                    continue;
-                }
-            }
+            let pos = vec3(pos[0] as f32, pos[1] as f32, pos[2] as f32) * 32.0;
+            let end_pos = pos + 32.0;
 
-            let model_matrix = mat4(
-                right,
-                up,
-                forward,
-                vec4(
-                    (pos[0] * 32) as f32,
-                    (pos[1] * 32) as f32,
-                    (pos[2] * 32) as f32,
-                    1.0,
-                ),
-            );
+            self.mesh
+                .borrow_mut()
+                .set_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
 
-            let instance_vbo = chunk.get_instances();
+            let instances = chunk.instance_positions();
 
-            let vao = self.plane_vao.with_instance(instance_vbo);
+            self.mesh.borrow_mut().set_instances_shared(instances);
 
             let uniforms = greedy_voxel::Uniforms {
-                modelMatrix: model_matrix.to_cols_array_2d(),
+                chunk_position: ipos.to_array(),
                 viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
                 projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
                 sky_light_color: vec4(1.0, 1.0, 1.0, 1.0).to_array(),
@@ -147,7 +144,7 @@ impl Renderable for ChunkManager {
 
             let program = greedy_voxel::Program::get();
 
-            draw::draw(&vao, &program, &uniforms)
+            draw::draw(&*self.mesh.borrow(), &program, &uniforms, state)
         }
     }
 }

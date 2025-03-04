@@ -1,13 +1,16 @@
-use glam::{Mat4, mat4, vec4};
-use renderer::{DrawMode, DrawType, Renderable, State, buffers::Vao, draw::draw};
+use glam::{Mat4, Vec3, mat4, vec4};
+use renderer::{
+    DrawMode, DrawType, Renderable, State, bounds::BoundingHeirarchy, buffers::Vao, draw::draw,
+    mesh::Mesh,
+};
 use shaders::Program;
 
 pub struct Voxel {
-    position: [i32; 3],
+    position: Vec3,
 }
 
 impl Voxel {
-    pub fn new(position: [i32; 3]) -> Self {
+    pub fn new(position: Vec3) -> Self {
         Self { position }
     }
 }
@@ -22,7 +25,7 @@ impl basic_voxel::Vertex {
 }
 
 impl Voxel {
-    pub fn get_vertices() -> Box<[basic_voxel::Vertex]> {
+    pub fn get_vertices() -> Vec<basic_voxel::Vertex> {
         // 0
         let fbl = basic_voxel::Vertex::new(0., 0., 0., [1., 0., 0., 1.]);
         // 1
@@ -40,18 +43,18 @@ impl Voxel {
         // 7
         let bbr = basic_voxel::Vertex::new(1., 0., 1., [0., 1., 0., 1.]);
 
-        Box::new([fbl, ftl, ftr, fbr, bbl, btl, btr, bbr])
+        vec![fbl, ftl, ftr, fbr, bbl, btl, btr, bbr]
     }
 
-    pub fn get_indices() -> Box<[u32]> {
-        Box::new([
+    pub fn get_indices() -> Vec<u32> {
+        vec![
             0, 1, 2, 2, 3, 0, // Front
             7, 6, 5, 5, 4, 7, // Back
             4, 5, 1, 1, 0, 4, // Left
             3, 2, 6, 6, 7, 3, // Right
             1, 5, 6, 6, 2, 1, // Top
             4, 0, 3, 3, 7, 4, // Bottom
-        ])
+        ]
     }
 
     pub fn get_model_matrix(&self) -> Mat4 {
@@ -69,12 +72,8 @@ impl Voxel {
         mat4(right, up, forward, position)
     }
 
-    pub fn get_position(&self) -> [f32; 3] {
-        [
-            self.position[0] as f32,
-            self.position[1] as f32,
-            self.position[2] as f32,
-        ]
+    pub fn get_position(&self) -> Vec3 {
+        self.position
     }
 }
 
@@ -91,14 +90,17 @@ impl Renderable for Voxel {
 
         let program = basic_voxel::Program::get();
 
-        let vao = Vao::new(
-            &vertices,
-            Some(&indices),
-            DrawType::Static,
+        let bounds = BoundingHeirarchy::from_min_max(self.position, self.position + 1.0);
+
+        let mesh = Mesh::new(
+            vertices,
+            Some(indices),
+            bounds,
             DrawMode::Triangles,
+            DrawType::Static,
         );
 
-        draw(&vao, &program, &uniforms);
+        draw(&mesh, &program, &uniforms, state);
     }
 }
 

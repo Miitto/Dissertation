@@ -24,7 +24,7 @@ impl Voxel {
 }
 
 impl greedy_voxel::Vertex {
-    pub fn new(v_pos: [f32; 3]) -> Self {
+    pub fn new(v_pos: [i32; 3]) -> Self {
         Self { v_pos }
     }
 }
@@ -35,12 +35,13 @@ shaders::program!(greedy_voxel, {
 
     uniform mat4 projectionMatrix;
     uniform mat4 viewMatrix;
-    uniform mat4 modelMatrix;
+
+    uniform ivec3 chunk_position;
 
     #include "shaders/lighting.glsl"
 
     struct vIn {
-        vec3 v_pos;
+        ivec3 v_pos;
     }
 
     struct iIn {
@@ -55,29 +56,28 @@ shaders::program!(greedy_voxel, {
         v2f o;
 
         mat4 vp = projectionMatrix * viewMatrix;
-        mat4 mvp = vp * modelMatrix;
 
-        float v_x = v.v_pos.x;
-        float v_y = v.v_pos.y;
-        float v_z = v.v_pos.z;
+        int v_x = v.v_pos.x;
+        int v_y = v.v_pos.y;
+        int v_z = v.v_pos.z;
 
-        float in_x = float((i.data >> 10) & 31);
-        float in_y = float((i.data >> 5) & 31);
-        float in_z = float(i.data & 31);
+        uint in_x = (i.data >> 10) & 31;
+        uint in_y = (i.data >> 5) & 31;
+        uint in_z = i.data & 31;
 
         uint direction = (i.data >> 15) & 7;
 
         uint width = (i.data >> 18) & 31;
         uint height = (i.data >> 23) & 31;
 
-        float w = float(width + 1);
-        float h = float(height + 1);
+        int w = int(width) + 1;
+        int h = int(height) + 1;
 
-        float x;
-        float y;
-        float z;
+        int x;
+        int y;
+        int z;
 
-        vec3 normal = vec3(0.0, 0.0, 0.0);
+        ivec3 normal = ivec3(0, 0, 0);
 
         // left right up down forward back
         switch (direction) {
@@ -89,7 +89,7 @@ shaders::program!(greedy_voxel, {
                 // Magenta
                 o.color = vec4(1.0, 0.0, 1.0, 1.0);
 
-                normal.x = -1.0;
+                normal.x = -1;
                 break;
             }
             // Right
@@ -100,7 +100,7 @@ shaders::program!(greedy_voxel, {
                 // Cyan
                 o.color = vec4(0.0, 1.0, 1.0, 1.0);
 
-                normal.x = 1.0;
+                normal.x = 1;
                 break;
             }
             // Up
@@ -110,7 +110,7 @@ shaders::program!(greedy_voxel, {
                 z = v_z * h;
                 o.color = vec4(1.0, 0.0, 0.0, 1.0);
 
-                normal.y = 1.0;
+                normal.y = 1;
                 break;
             }
             // Down
@@ -120,7 +120,7 @@ shaders::program!(greedy_voxel, {
                 z = v_z * h;
                 o.color = vec4(1.0, 1.0, 0.0, 1.0);
 
-                normal.y = -1.0;
+                normal.y = -1;
                 break;
             }
             // Forward
@@ -130,7 +130,7 @@ shaders::program!(greedy_voxel, {
                 y = (1-v_x) * h;
                 o.color = vec4(0.0, 1.0, 0.0, 1.0);
 
-                normal.z = -1.0;
+                normal.z = -1;
                 break;
             }
             // Backward
@@ -140,21 +140,21 @@ shaders::program!(greedy_voxel, {
                 y = (1-v_z) * h;
                 o.color = vec4(0.0, 0.0, 1.0, 1.0);
 
-                normal.z = 1.0;
+                normal.z = 1;
                 break;
             }
         }
 
-        float o_x = x + in_x;
-        float o_y = y + in_y;
-        float o_z = z + in_z;
+        int o_x = x + int(in_x) + chunk_position.x;
+        int o_y = y + int(in_y) + chunk_position.y;
+        int o_z = z + int(in_z) + chunk_position.z;
 
-        vec3 position = vec3(o_x, o_y, o_z);
+        vec3 position = vec3(float(o_x), float(o_y), float(o_z));
 
         o.color = apply_sky_lighting(o.color, normal, position);
 
 
-        gl_Position = mvp * vec4(position, 1.0);
+        gl_Position = vp * vec4(position, 1.0);
 
         return o;
     }

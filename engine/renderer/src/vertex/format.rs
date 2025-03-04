@@ -1,5 +1,7 @@
 use std::mem;
 
+use gl::INT_VEC3;
+
 use super::Attribute;
 
 // From https://github.com/glium/glium/blob/master/src/vertex/format.rs
@@ -233,8 +235,11 @@ impl AttributeType {
             U32 => gl::UNSIGNED_INT,
             F32 => gl::FLOAT,
             F32F32 => gl::FLOAT_VEC2,
+            I32I32 => gl::INT_VEC2,
             F32F32F32 => gl::FLOAT_VEC3,
+            I32I32I32 => gl::INT_VEC3,
             F32F32F32F32 => gl::FLOAT_VEC4,
+            I32I32I32I32 => gl::INT_VEC4,
             _ => {
                 todo!("TODO: Convert {:?} to OpenGL type", self)
             }
@@ -244,7 +249,7 @@ impl AttributeType {
     pub fn get_gl_primative(&self) -> u32 {
         use AttributeType::*;
         match *self {
-            I32 => gl::INT,
+            I32 | I32I32 | I32I32I32 | I32I32I32I32 => gl::INT,
             U32 => gl::UNSIGNED_INT,
             F32 | F32F32 | F32F32F32 | F32F32F32F32 => gl::FLOAT,
             _ => {
@@ -254,9 +259,7 @@ impl AttributeType {
     }
 
     pub fn is_integer(&self) -> bool {
-        use AttributeType::*;
-
-        matches!(*self, I32 | U32)
+        matches!(self.get_gl_primative(), gl::INT | gl::UNSIGNED_INT)
     }
 
     /// Returns the enum for the type in OpenGL

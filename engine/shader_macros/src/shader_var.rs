@@ -208,8 +208,11 @@ impl Display for ShaderPrimatives {
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderObjects {
     Vec2,
+    IVec2,
     Vec3,
+    IVec3,
     Vec4,
+    IVec4,
     Mat2,
     Mat3,
     Mat4,
@@ -273,8 +276,11 @@ impl Display for ShaderObjects {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ShaderObjects::Vec2 => write!(f, "vec2"),
+            ShaderObjects::IVec2 => write!(f, "ivec2"),
             ShaderObjects::Vec3 => write!(f, "vec3"),
+            ShaderObjects::IVec3 => write!(f, "ivec3"),
             ShaderObjects::Vec4 => write!(f, "vec4"),
+            ShaderObjects::IVec4 => write!(f, "ivec4"),
             ShaderObjects::Mat2 => write!(f, "mat2"),
             ShaderObjects::Mat3 => write!(f, "mat3"),
             ShaderObjects::Mat4 => write!(f, "mat4"),
@@ -287,8 +293,11 @@ impl ToTokens for ShaderObjects {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
             ShaderObjects::Vec2 => tokens.extend(quote! { [f32; 2] }),
+            ShaderObjects::IVec2 => tokens.extend(quote! { [i32; 2] }),
             ShaderObjects::Vec3 => tokens.extend(quote! { [f32; 3] }),
+            ShaderObjects::IVec3 => tokens.extend(quote! { [i32; 3] }),
             ShaderObjects::Vec4 => tokens.extend(quote! { [f32; 4] }),
+            ShaderObjects::IVec4 => tokens.extend(quote! { [i32; 4] }),
             ShaderObjects::Mat2 => tokens.extend(quote! { [[f32; 2]; 2] }),
             ShaderObjects::Mat3 => tokens.extend(quote! { [[f32; 3]; 3] }),
             ShaderObjects::Mat4 => tokens.extend(quote! { [[f32; 4]; 4] }),

@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::marker::PhantomData;
 
 use crate::{
     DrawMode, DrawType,
@@ -11,15 +11,12 @@ where
     T: Vertex,
     I: Vertex,
 {
-    id: gl::types::GLuint,
-    vbo: Rc<Vbo<T>>,
-    instance_vbo: Option<Rc<Vbo<I>>>,
-    indices: Rc<Indices>,
+    id: Option<gl::types::GLuint>,
+    vbo: Option<Vbo<T>>,
+    instance_vbo: Option<Vbo<I>>,
+    indices: Option<Indices>,
     ty: DrawType,
     pub mode: DrawMode,
-    /// Store if we reused the vao when adding an instance vbo. Will stop us from deleting the
-    /// vao twice
-    moved_to_instance: bool,
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -39,11 +36,25 @@ where
     where
         T: Vertex,
     {
+        Vao::new_typed::<EmptyVertex>(data, indices, ty, mode)
+    }
+
+    pub fn new_typed<I>(
+        data: &[T],
+        indices: Option<&[u32]>,
+        ty: DrawType,
+        mode: DrawMode,
+    ) -> Vao<T, I>
+    where
+        T: Vertex,
+        I: Vertex,
+    {
         let vbo = Vbo::new(data, ty, false);
 
         let mut vao = 0;
         unsafe {
             gl::GenVertexArrays(1, &mut vao);
+
             gl::BindVertexArray(vao);
         };
 
@@ -57,13 +68,12 @@ where
         vbo.setup();
 
         Vao {
-            id: vao,
+            id: Some(vao),
             ty,
-            vbo: Rc::new(vbo),
+            vbo: Some(vbo),
             instance_vbo: None,
-            indices: Rc::new(indices),
+            indices: Some(indices),
             mode,
-            moved_to_instance: false,
         }
     }
 }
@@ -90,57 +100,65 @@ where
 
         instance_vbo.setup();
 
-        vao.moved_to_instance = true;
-
         Vao {
-            id: vao.id,
+            id: vao.id.take(),
             ty: vao.ty,
-            vbo: vao.vbo.clone(),
-            instance_vbo: Some(Rc::new(instance_vbo)),
-            indices: vao.indices.clone(),
+            vbo: vao.vbo.take(),
+            instance_vbo: Some(instance_vbo),
+            indices: vao.indices.take(),
             mode: vao.mode,
-            moved_to_instance: false,
         }
     }
 
-    pub fn with_instance<O>(&self, instance: Rc<Vbo<O>>) -> Vao<T, O>
+    pub fn setup(&self) {
+        self.bind();
+
+        if let Some(vbo) = &self.vbo {
+            vbo.setup();
+        }
+
+        if let Some(instance_vbo) = &self.instance_vbo {
+            instance_vbo.setup();
+        }
+
+        if let Some(indices) = &self.indices {
+            indices.bind();
+        }
+
+        self.unbind_all();
+    }
+
+    pub fn new_maybe_instanced(
+        data: &[T],
+        indices: Option<&[u32]>,
+        ty: DrawType,
+        mode: DrawMode,
+        instance: Option<&[I]>,
+    ) -> Self
     where
-        O: Vertex,
+        T: Vertex,
+        I: Vertex,
     {
-        if !instance.instance {
-            panic!("Attempted to use a none instance vbo as an instance vbo");
+        if let Some(instance) = instance {
+            Vao::new_instanced(data, indices, ty, mode, instance)
+        } else {
+            Vao::new_typed::<I>(data, indices, ty, mode)
         }
+    }
 
-        let mut vao = 0;
-        unsafe {
-            gl::GenVertexArrays(1, &mut vao);
-            gl::BindVertexArray(vao);
+    pub fn update_instances(&mut self, data: &[I]) {
+        if let Some(instance_vbo) = &mut self.instance_vbo {
+            instance_vbo.bind();
+            instance_vbo.update(data);
+
+            self.bind();
+            self.setup();
         }
-
-        self.vbo.bind();
-        self.vbo.setup();
-        self.indices.bind();
-        instance.bind();
-        instance.setup();
-
-        let vao = Vao {
-            id: vao,
-            ty: self.ty,
-            vbo: self.vbo.clone(),
-            instance_vbo: Some(instance),
-            indices: self.indices.clone(),
-            mode: self.mode,
-            moved_to_instance: false,
-        };
-
-        vao.unbind_all();
-
-        vao
     }
 
     pub fn bind(&self) {
         unsafe {
-            gl::BindVertexArray(self.id);
+            gl::BindVertexArray(self.id.unwrap());
         };
     }
 
@@ -159,10 +177,10 @@ where
     }
 
     pub fn len(&self) -> usize {
-        if let Indices::Ebo(ebo) = &*self.indices {
+        if let Indices::Ebo(ebo) = &self.indices.as_ref().unwrap() {
             ebo.len
         } else {
-            self.vbo.len
+            self.vbo.as_ref().unwrap().len
         }
     }
 
@@ -171,7 +189,7 @@ where
     }
 
     pub fn has_indices(&self) -> bool {
-        !matches!(&*self.indices, Indices::None)
+        !matches!(&self.indices.as_ref().unwrap(), Indices::None)
     }
 
     pub fn instanced(&self) -> bool {
@@ -189,13 +207,11 @@ where
     I: Vertex,
 {
     fn drop(&mut self) {
-        if self.moved_to_instance {
-            return;
+        if let Some(id) = self.id.take() {
+            unsafe {
+                gl::DeleteVertexArrays(1, &id);
+            };
         }
-
-        unsafe {
-            gl::DeleteVertexArrays(1, &self.id);
-        };
     }
 }
 
@@ -207,6 +223,7 @@ where
     len: usize,
     instance: bool,
     data: PhantomData<T>,
+    ty: DrawType,
 }
 
 impl<T> Vbo<T>
@@ -236,11 +253,31 @@ where
             len: data.len(),
             instance,
             data: PhantomData,
+            ty,
         };
 
         Vbo::<T>::unbind();
 
         vbo
+    }
+
+    pub fn update(&mut self, data: &[T]) {
+        let size = std::mem::size_of_val(data);
+
+        self.len = data.len();
+
+        self.bind();
+
+        unsafe {
+            gl::BufferData(
+                gl::ARRAY_BUFFER,
+                size as gl::types::GLsizeiptr,
+                data.as_ptr() as *const _,
+                self.ty.into(),
+            );
+        };
+
+        Vbo::<T>::unbind();
     }
 
     pub fn setup(&self) -> &Vbo<T> {
