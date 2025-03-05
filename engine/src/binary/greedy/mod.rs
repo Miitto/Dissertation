@@ -3,14 +3,13 @@ use shaders::Program;
 use std::{cell::RefCell, collections::HashMap};
 
 use chunk::Chunk;
-use glam::{ivec3, mat4, vec3, vec4};
+use glam::{ivec3, vec3, vec4};
 use renderer::{
-    DrawMode, DrawType, Renderable, State, bounds::BoundingHeirarchy, buffers::Vao, draw,
-    mesh::Mesh,
+    DrawMode, DrawType, Renderable, State, bounds::BoundingHeirarchy, draw, mesh::Mesh,
 };
-use voxel::{BlockType, greedy_voxel};
+use voxel::greedy_voxel;
 
-use crate::{Args, tests::Scene};
+use crate::{Args, common::BlockType, tests::Scene};
 
 mod chunk;
 mod voxel;
@@ -20,7 +19,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
 
     let scene = args.scene;
     let radius = args.radius;
-    let height = args.depth;
+    let input_height = args.depth;
 
     match scene {
         Scene::Single => {
@@ -36,15 +35,21 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
         Scene::Plane => {
             for x in 0..radius {
                 for z in 0..radius {
-                    let chunk = Chunk::flat(height, BlockType::Grass);
+                    let chunk = Chunk::flat(input_height, BlockType::Grass);
                     manager.chunks.insert([x as i32, 0, z as i32], chunk);
                 }
             }
         }
         Scene::Perlin => {
             let mut noise = FastNoise::seeded(1234);
-            noise.set_noise_type(NoiseType::Perlin);
-            noise.set_frequency(0.1);
+            noise.set_noise_type(NoiseType::PerlinFractal);
+            noise.set_fractal_type(FractalType::FBM);
+            noise.set_fractal_octaves(5);
+            noise.set_fractal_gain(0.5);
+            noise.set_fractal_lacunarity(2.0);
+            noise.set_frequency(2.0);
+
+            const NOISE_SCALE: f32 = 160.0;
 
             for chunk_x in 0..radius as usize {
                 for chunk_z in 0..radius as usize {
@@ -53,20 +58,32 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
                             let absolute_x = (chunk_x * 32) as i32 + x as i32;
                             let absolute_z = (chunk_z * 32) as i32 + z as i32;
 
-                            let height = (noise.get_noise(absolute_x as f32, absolute_z as f32)
-                                * (height as f32)) as i32;
+                            let noise = noise.get_noise(
+                                absolute_x as f32 / NOISE_SCALE,
+                                absolute_z as f32 / NOISE_SCALE,
+                            );
+
+                            let height = ((noise + 0.7) * input_height as f32).ceil() as i32;
 
                             for chunk_y in 0..=height / 32 {
                                 let chunk = manager
                                     .chunks
                                     .entry([chunk_x as i32, chunk_y, chunk_z as i32])
-                                    .or_insert_with(|| Chunk::flat(1, BlockType::Grass));
+                                    .or_insert_with(|| Chunk::fill(BlockType::Air));
 
                                 for y in 0..32 {
                                     let absolute_y = (chunk_y * 32) + y as i32;
 
-                                    if absolute_y < height {
+                                    if absolute_y >= height {
+                                        break;
+                                    }
+
+                                    if absolute_y < input_height as i32 / 3 {
                                         chunk.set([x, y, z], BlockType::Grass);
+                                    } else if absolute_y < (input_height as i32 / 3) * 2 {
+                                        chunk.set([x, y, z], BlockType::Stone);
+                                    } else if absolute_y < input_height as i32 {
+                                        chunk.set([x, y, z], BlockType::Snow);
                                     }
                                 }
                             }
@@ -83,9 +100,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
 
 pub struct ChunkManager {
     chunks: HashMap<[i32; 3], chunk::Chunk>,
-    frustum_cull: bool,
     mesh: RefCell<Mesh<greedy_voxel::Vertex, greedy_voxel::Instance>>,
-    instance_needs_calculating: bool,
 }
 
 impl ChunkManager {
@@ -110,9 +125,7 @@ impl ChunkManager {
 
         Self {
             chunks: HashMap::new(),
-            frustum_cull,
             mesh: RefCell::new(mesh),
-            instance_needs_calculating: true,
         }
     }
 }

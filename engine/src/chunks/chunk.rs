@@ -2,14 +2,14 @@ use std::cell::{Ref, RefCell};
 
 use renderer::Dir;
 
-use crate::common::InstanceData;
+use crate::common::{BasicVoxel, BlockType, InstanceData, Voxel};
 
-use super::voxel::{self, BlockType, chunk_voxel};
+use super::voxel::chunk_voxel;
 
 const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
-    voxels: Box<[[[voxel::Voxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
     axes: RefCell<Option<Vec<chunk_voxel::Instance>>>,
 }
 
@@ -21,7 +21,7 @@ impl Chunk {
 
     pub fn fill(block_type: BlockType) -> Self {
         let voxels =
-            Box::new([[[voxel::Voxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+            Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
         Self {
             voxels,
             axes: RefCell::new(None),
@@ -34,7 +34,7 @@ impl Chunk {
         for y in 0..height {
             for x in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
-                    chunk.voxels[x][y as usize][z] = voxel::Voxel::new(block_type);
+                    chunk.voxels[x][y as usize][z] = BasicVoxel::new(block_type);
                 }
             }
         }
@@ -53,12 +53,20 @@ impl Chunk {
             for y in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
                     let voxel = &self.voxels[x][y][z];
-                    if !voxel.is_solid() {
+                    if !voxel.get_type().is_solid() {
                         continue;
                     }
 
                     for dir in Dir::all() {
-                        let pos = InstanceData::new(x as u8, y as u8, z as u8, dir, 1, 1);
+                        let pos = InstanceData::new(
+                            x as u8,
+                            y as u8,
+                            z as u8,
+                            dir,
+                            1,
+                            1,
+                            voxel.get_type(),
+                        );
                         data.push(chunk_voxel::Instance { data: pos.into() });
                     }
                 }

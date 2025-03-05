@@ -1,21 +1,18 @@
-use std::{
-    cell::{Ref, RefCell},
-    rc::Rc,
-};
+use std::{cell::RefCell, rc::Rc};
 
-use renderer::{Dir, DrawType, buffers::Vbo};
+use renderer::Dir;
 
 use crate::{
-    binary::common::{greedy_faces, make_culled_faces},
-    common::InstanceData,
+    binary::common::make_greedy_faces,
+    common::{BasicVoxel, BlockType, InstanceData, Voxel},
 };
 
-use super::voxel::{self, BlockType, greedy_voxel};
+use super::voxel::greedy_voxel;
 
 const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
-    voxels: Box<[[[voxel::Voxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
     instances: RefCell<Option<Rc<Vec<greedy_voxel::Instance>>>>,
 }
 
@@ -34,7 +31,7 @@ impl Chunk {
 
     pub fn fill(block_type: BlockType) -> Self {
         let voxels =
-            Box::new([[[voxel::Voxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+            Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
         Self {
             voxels,
             instances: RefCell::new(None),
@@ -47,7 +44,7 @@ impl Chunk {
         for y in 0..height {
             for x in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
-                    chunk.voxels[x][y as usize][z] = voxel::Voxel::new(block_type);
+                    chunk.voxels[x][y as usize][z] = BasicVoxel::new(block_type);
                 }
             }
         }
@@ -64,18 +61,24 @@ impl Chunk {
             return self.instances.borrow().as_ref().unwrap().clone();
         }
 
-        let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].is_solid();
+        let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].get_type();
 
-        let culled = make_culled_faces(get_fn);
-
-        let greedy = greedy_faces(culled);
+        let greedy = make_greedy_faces(get_fn);
 
         let mut instances = vec![];
 
         for dir in Dir::all() {
             for face in greedy[usize::from(dir)].iter() {
-                let data = InstanceData::new(face.x, face.y, face.z, dir, face.width, face.height)
-                    .rotate_on_dir();
+                let data = InstanceData::new(
+                    face.x,
+                    face.y,
+                    face.z,
+                    dir,
+                    face.width,
+                    face.height,
+                    face.block_type,
+                )
+                .rotate_on_dir();
 
                 instances.push(greedy_voxel::Instance { data: data.into() });
             }

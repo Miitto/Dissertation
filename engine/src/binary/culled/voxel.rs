@@ -1,28 +1,3 @@
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BlockType {
-    Air,
-    Grass,
-    // etc.
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Voxel {
-    block_type: BlockType,
-}
-
-impl Voxel {
-    pub fn new(block_type: BlockType) -> Self {
-        Self { block_type }
-    }
-
-    pub fn is_solid(&self) -> bool {
-        self.block_type != BlockType::Air
-    }
-    pub fn set_type(&mut self, block_type: BlockType) {
-        self.block_type = block_type;
-    }
-}
-
 impl culled_voxel::Vertex {
     pub fn new(v_pos: [f32; 3]) -> Self {
         Self { v_pos }

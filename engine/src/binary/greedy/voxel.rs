@@ -1,28 +1,3 @@
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub enum BlockType {
-    Air,
-    Grass,
-    // etc.
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct Voxel {
-    block_type: BlockType,
-}
-
-impl Voxel {
-    pub fn new(block_type: BlockType) -> Self {
-        Self { block_type }
-    }
-
-    pub fn is_solid(&self) -> bool {
-        self.block_type != BlockType::Air
-    }
-    pub fn set_type(&mut self, block_type: BlockType) {
-        self.block_type = block_type;
-    }
-}
-
 impl greedy_voxel::Vertex {
     pub fn new(v_pos: [i32; 3]) -> Self {
         Self { v_pos }
@@ -70,6 +45,8 @@ shaders::program!(greedy_voxel, {
         uint width = (i.data >> 18) & 31;
         uint height = (i.data >> 23) & 31;
 
+        uint block_type = (i.data >> 28);
+
         int w = int(width) + 1;
         int h = int(height) + 1;
 
@@ -86,8 +63,6 @@ shaders::program!(greedy_voxel, {
                 x = 0;
                 y = (1-v_x) * h;
                 z = v_z * w;
-                // Magenta
-                o.color = vec4(1.0, 0.0, 1.0, 1.0);
 
                 normal.x = -1;
                 break;
@@ -97,8 +72,6 @@ shaders::program!(greedy_voxel, {
                 x = 1;
                 y = v_x * h;
                 z = v_z * w;
-                // Cyan
-                o.color = vec4(0.0, 1.0, 1.0, 1.0);
 
                 normal.x = 1;
                 break;
@@ -108,7 +81,6 @@ shaders::program!(greedy_voxel, {
                 x = v_x * w;
                 y = 0;
                 z = v_z * h;
-                o.color = vec4(1.0, 0.0, 0.0, 1.0);
 
                 normal.y = 1;
                 break;
@@ -118,7 +90,6 @@ shaders::program!(greedy_voxel, {
                 x = (1-v_x) * w;
                 y = 1;
                 z = v_z * h;
-                o.color = vec4(1.0, 1.0, 0.0, 1.0);
 
                 normal.y = -1;
                 break;
@@ -128,7 +99,6 @@ shaders::program!(greedy_voxel, {
                 z = 0;
                 x = (1-v_z) * w;
                 y = (1-v_x) * h;
-                o.color = vec4(0.0, 1.0, 0.0, 1.0);
 
                 normal.z = -1;
                 break;
@@ -138,10 +108,25 @@ shaders::program!(greedy_voxel, {
                 z = 1;
                 x = v_x * w;
                 y = (1-v_z) * h;
-                o.color = vec4(0.0, 0.0, 1.0, 1.0);
 
                 normal.z = 1;
                 break;
+            }
+        }
+
+        vec3 color = vec3(0.0, 0.0, 0.0);
+
+        switch (block_type) {
+            case 1: {
+                color = vec3(0.1, 0.75, 0.1);
+                break;
+            }
+            case 2: {
+                color = vec3(0.25, 0.25, 0.25);
+                break;
+            }
+            case 3: {
+                color = vec3(0.8, 0.8, 0.8);
             }
         }
 
@@ -151,7 +136,7 @@ shaders::program!(greedy_voxel, {
 
         vec3 position = vec3(float(o_x), float(o_y), float(o_z));
 
-        o.color = apply_sky_lighting(o.color, normal, position);
+        o.color = apply_sky_lighting(vec4(color, 1.0), normal, position);
 
 
         gl_Position = vp * vec4(position, 1.0);

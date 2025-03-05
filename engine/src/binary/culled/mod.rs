@@ -3,9 +3,9 @@ use std::collections::HashMap;
 use chunk::Chunk;
 use glam::{mat4, vec4};
 use renderer::{Renderable, State};
-use voxel::{BlockType, culled_voxel};
+use voxel::culled_voxel;
 
-use crate::{Args, tests::Scene};
+use crate::{Args, common::BlockType, tests::Scene};
 
 mod chunk;
 mod voxel;

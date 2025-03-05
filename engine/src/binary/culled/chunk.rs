@@ -2,14 +2,17 @@ use std::cell::{Ref, RefCell};
 
 use renderer::Dir;
 
-use crate::{binary::common::make_culled_faces, common::InstanceData};
+use crate::{
+    binary::common::make_culled_faces,
+    common::{BasicVoxel, BlockType, InstanceData, Voxel},
+};
 
-use super::voxel::{self, BlockType, culled_voxel};
+use super::voxel::culled_voxel;
 
 const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
-    voxels: Box<[[[voxel::Voxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+    voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
     instances: RefCell<Option<Vec<culled_voxel::Instance>>>,
 }
 
@@ -21,7 +24,7 @@ impl Chunk {
 
     pub fn fill(block_type: BlockType) -> Self {
         let voxels =
-            Box::new([[[voxel::Voxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+            Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
         Self {
             voxels,
             instances: RefCell::new(None),
@@ -34,7 +37,7 @@ impl Chunk {
         for y in 0..height {
             for x in 0..CHUNK_SIZE {
                 for z in 0..CHUNK_SIZE {
-                    chunk.voxels[x][y as usize][z] = voxel::Voxel::new(block_type);
+                    chunk.voxels[x][y as usize][z] = BasicVoxel::new(block_type);
                 }
             }
         }
@@ -47,7 +50,7 @@ impl Chunk {
             return Ref::map(self.instances.borrow(), |o| o.as_ref().unwrap());
         }
 
-        let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].is_solid();
+        let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].get_type();
 
         let culled = make_culled_faces(get_fn);
 
@@ -65,8 +68,16 @@ impl Chunk {
                             continue;
                         }
 
-                        let pos =
-                            InstanceData::new(x as u8, y as u8, z as u8, dir, 1, 1).rotate_on_dir();
+                        let pos = InstanceData::new(
+                            x as u8,
+                            y as u8,
+                            z as u8,
+                            dir,
+                            1,
+                            1,
+                            self.voxels[x][y][z].get_type(),
+                        )
+                        .rotate_on_dir();
                         instances.push(culled_voxel::Instance { data: pos.into() });
                     }
                 }

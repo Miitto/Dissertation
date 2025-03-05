@@ -3,8 +3,82 @@ use renderer::Dir;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InstanceData(u32);
 
+pub trait Voxel {
+    fn get_type(&self) -> BlockType;
+    fn set_type(&mut self, block_type: BlockType);
+}
+
+#[derive(Debug, Clone, Copy)]
+pub struct BasicVoxel {
+    block_type: BlockType,
+}
+
+impl BasicVoxel {
+    pub fn new(block_type: BlockType) -> Self {
+        Self { block_type }
+    }
+}
+
+impl Voxel for BasicVoxel {
+    fn get_type(&self) -> BlockType {
+        self.block_type
+    }
+
+    fn set_type(&mut self, block_type: BlockType) {
+        self.block_type = block_type;
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Default, Hash, Eq)]
+pub enum BlockType {
+    #[default]
+    Air,
+    Grass,
+    Stone,
+    Snow, // etc.
+}
+
+impl BlockType {
+    pub fn is_solid(&self) -> bool {
+        *self != BlockType::Air
+    }
+}
+
+impl From<BlockType> for u32 {
+    fn from(value: BlockType) -> u32 {
+        match value {
+            BlockType::Air => 0,
+            BlockType::Grass => 1,
+            BlockType::Stone => 2,
+            BlockType::Snow => 3,
+        }
+    }
+}
+
+impl TryFrom<u32> for BlockType {
+    type Error = ();
+
+    fn try_from(value: u32) -> Result<Self, Self::Error> {
+        match value {
+            0 => Ok(BlockType::Air),
+            1 => Ok(BlockType::Grass),
+            2 => Ok(BlockType::Stone),
+            3 => Ok(BlockType::Snow),
+            _ => Err(()),
+        }
+    }
+}
+
 impl InstanceData {
-    pub fn new(x: u8, y: u8, z: u8, direction: Dir, width: u8, height: u8) -> Self {
+    pub fn new(
+        x: u8,
+        y: u8,
+        z: u8,
+        direction: Dir,
+        width: u8,
+        height: u8,
+        block_type: BlockType,
+    ) -> Self {
         if x > 31 || y > 31 || z > 31 {
             panic!("Invalid position: ({}, {}, {})", x, y, z);
         }
@@ -31,7 +105,11 @@ impl InstanceData {
         let w_mask = (width & 0b11111) << 18;
         let h_mask = (height & 0b11111) << 23;
 
-        Self(x_mask | y_mask | z_mask | d_mask | w_mask | h_mask)
+        let block_type: u32 = block_type.into();
+
+        let block_type_mask = block_type << 28;
+
+        Self(x_mask | y_mask | z_mask | d_mask | w_mask | h_mask | block_type_mask)
     }
 
     pub fn as_int(&self) -> u32 {
@@ -62,6 +140,10 @@ impl InstanceData {
         ((self.0 >> 23) & 0b11111) as u8
     }
 
+    pub fn block_type(&self) -> BlockType {
+        (self.0 >> 28).try_into().unwrap()
+    }
+
     pub fn rotate_on_dir(&self) -> Self {
         let x = self.x();
         let y = self.y();
@@ -69,11 +151,12 @@ impl InstanceData {
         let dir = self.dir();
         let width = self.width();
         let height = self.height();
+        let block_type = self.block_type();
 
         match dir {
-            Dir::Up | Dir::Down => Self::new(x, z, y, dir, width, height),
-            Dir::Forward | Dir::Backward => Self::new(x, y, z, dir, width, height),
-            Dir::Left | Dir::Right => Self::new(z, y, x, dir, width, height),
+            Dir::Up | Dir::Down => Self::new(x, z, y, dir, width, height, block_type),
+            Dir::Forward | Dir::Backward => Self::new(x, y, z, dir, width, height, block_type),
+            Dir::Left | Dir::Right => Self::new(z, y, x, dir, width, height, block_type),
         }
     }
 }
