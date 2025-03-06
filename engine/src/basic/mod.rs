@@ -1,5 +1,5 @@
 use glam::vec3;
-use renderer::{Renderable, State, bounds::BoundingHeirarchy, buffers::Vao, mesh::Mesh};
+use renderer::{Renderable, bounds::BoundingHeirarchy, mesh::Mesh};
 use shaders::Program;
 use voxel::{Voxel, instanced_voxel};
 
@@ -34,9 +34,9 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
         Scene::Plane => {
             renderables.reserve_exact(radius as usize * radius as usize * height as usize);
 
-            for x in 0..radius as i32 {
-                for z in 0..radius as i32 {
-                    for y in 0..height as i32 {
+            for x in -radius..radius {
+                for z in -radius..radius {
+                    for y in 0..height {
                         renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
                     }
                 }

@@ -1,7 +1,6 @@
 use glam::{Mat4, Vec3, mat4, vec4};
 use renderer::{
-    DrawMode, DrawType, Renderable, State, bounds::BoundingHeirarchy, buffers::Vao, draw::draw,
-    mesh::Mesh,
+    DrawMode, DrawType, Renderable, State, bounds::BoundingHeirarchy, draw::draw, mesh::Mesh,
 };
 use shaders::Program;
 
@@ -58,12 +57,7 @@ impl Voxel {
     }
 
     pub fn get_model_matrix(&self) -> Mat4 {
-        let position = vec4(
-            self.position[0] as f32,
-            self.position[1] as f32,
-            self.position[2] as f32,
-            1.0,
-        );
+        let position = vec4(self.position[0], self.position[1], self.position[2], 1.0);
 
         let forward = vec4(0., 0., -1., 0.);
         let right = vec4(1., 0., 0., 0.);
