@@ -28,10 +28,10 @@ pub fn setup(args: &Args, state: &State) -> ChunkManager {
             manager.chunks.insert([0, 0, 0], chunk);
         }
         Scene::Plane => {
-            for x in 0..radius {
-                for z in 0..radius {
-                    let chunk = Chunk::flat(height, BlockType::Grass);
-                    manager.chunks.insert([x as i32, 0, z as i32], chunk);
+            for x in -radius..radius {
+                for z in -radius..radius {
+                    let chunk = Chunk::flat(height as u8, BlockType::Grass);
+                    manager.chunks.insert([x, 0, z], chunk);
                 }
             }
         }
@@ -63,7 +63,7 @@ impl ChunkManager {
 }
 
 impl Renderable for ChunkManager {
-    fn render(&self, state: &mut renderer::State) {
+    fn render(&mut self, state: &mut renderer::State) {
         let right = vec4(1., 0., 0., 0.0);
         let up = vec4(0., 1., 0., 0.0);
         let forward = vec4(0., 0., -1., 0.0);

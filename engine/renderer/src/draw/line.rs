@@ -55,7 +55,7 @@ impl Line {
 }
 
 impl Renderable for Line {
-    fn render(&self, state: &mut crate::State) {
+    fn render(&mut self, state: &mut crate::State) {
         let uniforms = line::Uniforms {
             projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
             viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
@@ -63,7 +63,7 @@ impl Renderable for Line {
 
         let vertices = self.to_vertices();
 
-        let bounds = self.into();
+        let bounds = (self as &Self).into();
 
         let vao = crate::mesh::Mesh::new(
             vertices,

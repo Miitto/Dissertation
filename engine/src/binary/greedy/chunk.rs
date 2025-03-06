@@ -1,5 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
+use glam::Vec3;
 use renderer::Dir;
 
 use crate::{
@@ -13,7 +14,7 @@ const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
     voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    instances: RefCell<Option<Rc<Vec<greedy_voxel::Instance>>>>,
+    instances: Option<Vec<greedy_voxel::Instance>>,
 }
 
 impl Chunk {
@@ -23,7 +24,7 @@ impl Chunk {
             return;
         }
 
-        *self.instances.borrow_mut() = None;
+        self.instances = None;
         self.voxels[pos[0]][pos[1]][pos[2]].set_type(block_type);
 
         self.invalidate()
@@ -34,7 +35,7 @@ impl Chunk {
             Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
         Self {
             voxels,
-            instances: RefCell::new(None),
+            instances: None,
         }
     }
 
@@ -52,13 +53,31 @@ impl Chunk {
         chunk
     }
 
-    fn invalidate(&self) {
-        *self.instances.borrow_mut() = None;
+    fn invalidate(&mut self) {
+        self.instances = None;
     }
 
-    pub fn instance_positions(&self) -> Rc<Vec<greedy_voxel::Instance>> {
-        if self.instances.borrow().is_some() {
-            return self.instances.borrow().as_ref().unwrap().clone();
+    pub fn instance_positions(&mut self, forward_vector: &Vec3) -> Vec<greedy_voxel::Instance> {
+        if self.instances.is_some() {
+            return self
+                .instances
+                .as_ref()
+                .unwrap()
+                .iter()
+                .filter(|instance| {
+                    let dir = Dir::from(((instance.data >> 15) & 7) as usize);
+
+                    match dir {
+                        Dir::Forward => forward_vector.z >= -0.75,
+                        Dir::Backward => forward_vector.z <= 0.75,
+                        Dir::Left => forward_vector.x >= -0.75,
+                        Dir::Right => forward_vector.x <= 0.75,
+                        Dir::Up => forward_vector.y >= -0.75,
+                        Dir::Down => forward_vector.y <= 0.75,
+                    }
+                })
+                .cloned()
+                .collect();
         }
 
         let get_fn = |x: usize, y: usize, z: usize| self.voxels[x][y][z].get_type();
@@ -84,8 +103,8 @@ impl Chunk {
             }
         }
 
-        *self.instances.borrow_mut() = Some(Rc::new(instances));
+        self.instances = Some(instances);
 
-        self.instance_positions()
+        self.instance_positions(forward_vector)
     }
 }

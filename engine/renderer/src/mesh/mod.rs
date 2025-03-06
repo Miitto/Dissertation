@@ -14,7 +14,7 @@ where
 {
     vertices: Vec<T>,
     indices: Option<Vec<u32>>,
-    instances: Option<Rc<Vec<I>>>,
+    instances: Option<Vec<I>>,
     bounds: BoundingHeirarchy,
     vao: RefCell<Option<Vao<T, I>>>,
     frustum_cull: bool,
@@ -64,7 +64,7 @@ where
         Self {
             vertices,
             indices,
-            instances: Some(Rc::new(instances)),
+            instances: Some(instances),
             bounds,
             frustum_cull: false,
             vao: RefCell::new(None),
@@ -79,13 +79,8 @@ where
     }
 
     pub fn set_instances(&mut self, instances: Vec<I>) {
-        self.set_instances_shared(Rc::new(instances));
-    }
-
-    pub fn set_instances_shared(&mut self, instances: Rc<Vec<I>>) {
         self.instances = Some(instances);
-
-        *self.dirty_instance.borrow_mut() = true;
+        self.dirty_instance.replace(true);
     }
 
     pub fn make_vao(&self) {
@@ -94,7 +89,7 @@ where
             self.indices.as_deref(),
             self.draw_type,
             self.draw_mode,
-            self.instances.as_ref().map(|i| i.as_slice()),
+            self.instances.as_deref(),
         );
         *self.vao.borrow_mut() = Some(vao);
 

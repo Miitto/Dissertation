@@ -77,9 +77,9 @@ impl VoxelManager {
 }
 
 impl Renderable for VoxelManager {
-    fn render(&self, state: &mut renderer::State) {
+    fn render(&mut self, state: &mut renderer::State) {
         if !self.instance {
-            for voxel in &self.voxels {
+            for voxel in &mut self.voxels {
                 voxel.render(state);
             }
             return;

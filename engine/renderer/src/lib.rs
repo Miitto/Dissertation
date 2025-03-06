@@ -150,7 +150,7 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
 }
 
 pub trait Renderable {
-    fn render(&self, state: &mut State);
+    fn render(&mut self, state: &mut State);
 }
 
 extern "system" fn gl_error_callback(

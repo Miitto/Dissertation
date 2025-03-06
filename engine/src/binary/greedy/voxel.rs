@@ -14,6 +14,7 @@ shaders::program!(greedy_voxel, {
     uniform ivec3 chunk_position;
 
     #include "shaders/lighting.glsl"
+    #include "shaders/block.glsl"
 
     struct vIn {
         ivec3 v_pos;
@@ -114,21 +115,7 @@ shaders::program!(greedy_voxel, {
             }
         }
 
-        vec3 color = vec3(0.0, 0.0, 0.0);
-
-        switch (block_type) {
-            case 1: {
-                color = vec3(0.1, 0.75, 0.1);
-                break;
-            }
-            case 2: {
-                color = vec3(0.25, 0.25, 0.25);
-                break;
-            }
-            case 3: {
-                color = vec3(0.8, 0.8, 0.8);
-            }
-        }
+        vec4 color = get_block_color(block_type);
 
         int o_x = x + int(in_x) + chunk_position.x;
         int o_y = y + int(in_y) + chunk_position.y;
@@ -136,7 +123,7 @@ shaders::program!(greedy_voxel, {
 
         vec3 position = vec3(float(o_x), float(o_y), float(o_z));
 
-        o.color = apply_sky_lighting(vec4(color, 1.0), normal, position);
+        o.color = apply_sky_lighting(color, normal, position);
 
 
         gl_Position = vp * vec4(position, 1.0);

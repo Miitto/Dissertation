@@ -28,15 +28,14 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
             manager.chunks.insert([0, 0, 0], chunk);
         }
         Scene::Cube => {
-            let mut chunk = Chunk::fill(BlockType::Grass);
-            chunk.set([0, 0, 1], BlockType::Air);
+            let chunk = Chunk::fill(BlockType::Grass);
             manager.chunks.insert([0, 0, 0], chunk);
         }
         Scene::Plane => {
-            for x in 0..radius {
-                for z in 0..radius {
-                    let chunk = Chunk::flat(input_height, BlockType::Grass);
-                    manager.chunks.insert([x as i32, 0, z as i32], chunk);
+            for x in -radius..radius {
+                for z in -radius..radius {
+                    let chunk = Chunk::flat(input_height as u8, BlockType::Grass);
+                    manager.chunks.insert([x, 0, z], chunk);
                 }
             }
         }
@@ -51,12 +50,12 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
 
             const NOISE_SCALE: f32 = 160.0;
 
-            for chunk_x in 0..radius as usize {
-                for chunk_z in 0..radius as usize {
+            for chunk_x in -radius..radius {
+                for chunk_z in -radius..radius {
                     for x in 0..32 {
                         for z in 0..32 {
-                            let absolute_x = (chunk_x * 32) as i32 + x as i32;
-                            let absolute_z = (chunk_z * 32) as i32 + z as i32;
+                            let absolute_x = (chunk_x * 32) + x as i32;
+                            let absolute_z = (chunk_z * 32) + z as i32;
 
                             let noise = noise.get_noise(
                                 absolute_x as f32 / NOISE_SCALE,
@@ -68,7 +67,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
                             for chunk_y in 0..=height / 32 {
                                 let chunk = manager
                                     .chunks
-                                    .entry([chunk_x as i32, chunk_y, chunk_z as i32])
+                                    .entry([chunk_x, chunk_y, chunk_z])
                                     .or_insert_with(|| Chunk::fill(BlockType::Air));
 
                                 for y in 0..32 {
@@ -78,12 +77,12 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
                                         break;
                                     }
 
-                                    if absolute_y < input_height as i32 / 3 {
-                                        chunk.set([x, y, z], BlockType::Grass);
-                                    } else if absolute_y < (input_height as i32 / 3) * 2 {
-                                        chunk.set([x, y, z], BlockType::Stone);
-                                    } else if absolute_y < input_height as i32 {
+                                    if absolute_y > input_height - 3 {
                                         chunk.set([x, y, z], BlockType::Snow);
+                                    } else if absolute_y > input_height / 2 {
+                                        chunk.set([x, y, z], BlockType::Grass);
+                                    } else {
+                                        chunk.set([x, y, z], BlockType::Stone);
                                     }
                                 }
                             }
@@ -131,8 +130,8 @@ impl ChunkManager {
 }
 
 impl Renderable for ChunkManager {
-    fn render(&self, state: &mut renderer::State) {
-        for (pos, chunk) in &self.chunks {
+    fn render(&mut self, state: &mut renderer::State) {
+        for (pos, chunk) in &mut self.chunks {
             let ipos = ivec3(pos[0], pos[1], pos[2]) * 32;
 
             let pos = vec3(pos[0] as f32, pos[1] as f32, pos[2] as f32) * 32.0;
@@ -142,9 +141,9 @@ impl Renderable for ChunkManager {
                 .borrow_mut()
                 .set_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
 
-            let instances = chunk.instance_positions();
+            let instances = chunk.instance_positions(&state.cameras.game().forward());
 
-            self.mesh.borrow_mut().set_instances_shared(instances);
+            self.mesh.borrow_mut().set_instances(instances);
 
             let uniforms = greedy_voxel::Uniforms {
                 chunk_position: ipos.to_array(),

@@ -27,11 +27,11 @@ struct Args {
 
     /// Radius
     #[arg(short, long, default_value = "8")]
-    radius: u8,
+    radius: i32,
 
     /// Height
     #[arg(short, long, default_value = "8")]
-    depth: u8,
+    depth: i32,
 
     /// Frustum Culling
     #[arg(short, long, default_value = "false")]
@@ -157,7 +157,7 @@ impl ApplicationHandler for App {
 
                 self.state.handle_input();
 
-                self.setup.as_ref().unwrap().render(&mut self.state);
+                self.setup.as_mut().unwrap().render(&mut self.state);
 
                 self.state.cameras.render_gizmos(&self.state);
 

@@ -78,7 +78,7 @@ impl Voxel {
 }
 
 impl Renderable for Voxel {
-    fn render(&self, state: &mut State) {
+    fn render(&mut self, state: &mut State) {
         let vertices = Voxel::get_vertices();
         let indices = Voxel::get_indices();
 
