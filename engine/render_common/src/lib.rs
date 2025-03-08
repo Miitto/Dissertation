@@ -11,6 +11,8 @@ use shaders::ShaderType;
 mod uniform_value;
 pub use uniform_value::UniformValue;
 
+pub mod format;
+
 thread_local! {
     static ACTIVE_PROGRAM: RefCell<Option<gl::types::GLuint>> = const { RefCell::new(None) };
 }

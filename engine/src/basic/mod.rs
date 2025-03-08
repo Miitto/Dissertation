@@ -1,66 +1,37 @@
-use glam::vec3;
-use renderer::{Renderable, bounds::BoundingHeirarchy, mesh::Mesh};
+use std::{cell::RefCell, rc::Rc};
+
+use glam::{ivec3, vec3};
+use renderer::{
+    DrawMode, Renderable,
+    bounds::BoundingHeirarchy,
+    mesh::{Mesh, basic::BasicMesh, ninstanced::NInstancedMesh},
+};
 use shaders::Program;
 use voxel::{Voxel, instanced_voxel};
 
-use crate::{Args, tests::Scene};
-use bracket_noise::prelude::*;
+use crate::{Args, tests::test_scene};
 
 mod voxel;
 
 pub fn setup(args: &Args, instance: bool) -> VoxelManager {
-    use voxel::Voxel;
+    let data = test_scene(args);
 
-    let scene = args.scene;
-    let radius = args.radius;
-    let height = args.depth;
+    let basic_mesh = BasicMesh::from_data(
+        Voxel::get_vertices().as_slice(),
+        Some(&Voxel::get_indices()),
+        None,
+        None,
+        false,
+        false,
+        DrawMode::Triangles,
+    );
 
-    let mut renderables = Vec::new();
-    match scene {
-        Scene::Single => {
-            renderables.push(Voxel::new(vec3(0.0, 0., 0.)));
-        }
-        Scene::Cube => {
-            renderables.reserve_exact(32 * 32 * 32);
+    let mesh = Rc::new(RefCell::new(basic_mesh));
 
-            for x in 0..32 {
-                for y in 0..32 {
-                    for z in 0..32 {
-                        renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
-                    }
-                }
-            }
-        }
-        Scene::Plane => {
-            renderables.reserve_exact(radius as usize * radius as usize * height as usize);
-
-            for x in -radius..radius {
-                for z in -radius..radius {
-                    for y in 0..height {
-                        renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
-                    }
-                }
-            }
-        }
-        Scene::Perlin => {
-            let mut noise = FastNoise::seeded(1234);
-            noise.set_noise_type(NoiseType::Perlin);
-            noise.set_frequency(0.1);
-
-            let radius = (radius as u32) * 32;
-
-            renderables.reserve_exact((radius * radius) as usize);
-
-            for x in 0..radius as i32 {
-                for z in 0..radius as i32 {
-                    let height = (noise.get_noise(x as f32, z as f32) * (height as f32)) as i32;
-                    for y in 0..height {
-                        renderables.push(Voxel::new(vec3(x as f32, y as f32, z as f32)));
-                    }
-                }
-            }
-        }
-    }
+    let renderables = data
+        .into_iter()
+        .map(|(pos, block)| Voxel::new(ivec3(pos[0], pos[1], pos[2]), block, mesh.clone()))
+        .collect::<Vec<_>>();
 
     VoxelManager::new(renderables, instance)
 }
@@ -68,11 +39,80 @@ pub fn setup(args: &Args, instance: bool) -> VoxelManager {
 pub struct VoxelManager {
     voxels: Vec<Voxel>,
     instance: bool,
+    mesh: Option<NInstancedMesh<instanced_voxel::Vertex, instanced_voxel::Instance>>,
 }
 
 impl VoxelManager {
     pub fn new(voxels: Vec<Voxel>, instance: bool) -> Self {
-        Self { voxels, instance }
+        let mesh = if instance {
+            let vertices = Voxel::get_vertices()
+                .into_iter()
+                .map(|v| instanced_voxel::Vertex {
+                    position: v.position,
+                })
+                .collect::<Vec<_>>();
+            let indices = Voxel::get_indices();
+
+            let mut mesh =
+                NInstancedMesh::with_vertices(&vertices, Some(&indices), DrawMode::Triangles)
+                    .expect("Failed to create NInstancedMehs for instanced basic voxel");
+
+            let instances = voxels
+                .iter()
+                .map(|v| {
+                    println!("Pos: {} | Block: {:?}", v.get_position(), v.block_type);
+                    let pos = v.get_position();
+                    instanced_voxel::Instance {
+                        pos: [pos.x, pos.y, pos.z],
+                        block_type: v.block_type.into(),
+                    }
+                })
+                .collect::<Vec<_>>();
+
+            let min_x = voxels
+                .iter()
+                .map(|v| v.get_position().x)
+                .fold(i32::MAX, i32::min);
+            let max_x = voxels
+                .iter()
+                .map(|v| v.get_position().x)
+                .fold(i32::MIN, i32::max);
+            let min_y = voxels
+                .iter()
+                .map(|v| v.get_position().y)
+                .fold(i32::MAX, i32::min);
+            let max_y = voxels
+                .iter()
+                .map(|v| v.get_position().y)
+                .fold(i32::MIN, i32::max);
+            let min_z = voxels
+                .iter()
+                .map(|v| v.get_position().z)
+                .fold(i32::MAX, i32::min);
+            let max_z = voxels
+                .iter()
+                .map(|v| v.get_position().z)
+                .fold(i32::MIN, i32::max);
+
+            let min_coord = vec3(min_x as f32, min_y as f32, min_z as f32);
+            let max_coord = vec3(max_x as f32, max_y as f32, max_z as f32);
+
+            let bounds = BoundingHeirarchy::from_min_max(min_coord, max_coord);
+
+            mesh.set_bounds(bounds);
+            mesh.set_instances(&instances)
+                .expect("Failed to set instance data");
+
+            Some(mesh)
+        } else {
+            None
+        };
+
+        Self {
+            voxels,
+            instance,
+            mesh,
+        }
     }
 }
 
@@ -85,57 +125,7 @@ impl Renderable for VoxelManager {
             return;
         }
 
-        let vertices = Voxel::get_vertices();
-        let indices = Voxel::get_indices();
-
-        let instances = self.voxels.iter().map(|v| instanced_voxel::Instance {
-            pos: v.get_position().to_array(),
-        });
-
-        let min_x = self
-            .voxels
-            .iter()
-            .map(|v| v.get_position().x)
-            .fold(f32::INFINITY, f32::min);
-        let max_x = self
-            .voxels
-            .iter()
-            .map(|v| v.get_position().x)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let min_y = self
-            .voxels
-            .iter()
-            .map(|v| v.get_position().y)
-            .fold(f32::INFINITY, f32::min);
-        let max_y = self
-            .voxels
-            .iter()
-            .map(|v| v.get_position().y)
-            .fold(f32::NEG_INFINITY, f32::max);
-        let min_z = self
-            .voxels
-            .iter()
-            .map(|v| v.get_position().z)
-            .fold(f32::INFINITY, f32::min);
-        let max_z = self
-            .voxels
-            .iter()
-            .map(|v| v.get_position().z)
-            .fold(f32::NEG_INFINITY, f32::max);
-
-        let min_coord = vec3(min_x, min_y, min_z);
-        let max_coord = vec3(max_x, max_y, max_z);
-
-        let bounds = BoundingHeirarchy::from_min_max(min_coord, max_coord);
-
-        let mesh = Mesh::new_instance(
-            vertices,
-            Some(indices),
-            instances.collect::<Vec<_>>(),
-            bounds,
-            renderer::DrawMode::Triangles,
-            renderer::DrawType::Static,
-        );
+        let mesh = self.mesh.as_mut().unwrap();
 
         let program = instanced_voxel::Program::get();
 
@@ -144,6 +134,6 @@ impl Renderable for VoxelManager {
             projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
         };
 
-        renderer::draw::draw(&mesh, &program, &uniforms, state);
+        renderer::draw::draw(mesh, &program, &uniforms, state);
     }
 }

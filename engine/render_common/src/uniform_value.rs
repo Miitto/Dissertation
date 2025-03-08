@@ -21,6 +21,13 @@ impl_uniform_value!(
     [i32; 4], Uniform4i, self, self[0], self[1], self[2], self[3]
 );
 
+impl_uniform_value!(u32, Uniform1ui, self, *self);
+impl_uniform_value!([u32; 2], Uniform2ui, self, self[0], self[1]);
+impl_uniform_value!([u32; 3], Uniform3ui, self, self[0], self[1], self[2]);
+impl_uniform_value!(
+    [u32; 4], Uniform4ui, self, self[0], self[1], self[2], self[3]
+);
+
 impl_uniform_value!(f32, Uniform1f, self, *self);
 impl_uniform_value!([f32; 2], Uniform2f, self, self[0], self[1]);
 impl_uniform_value!([f32; 3], Uniform3f, self, self[0], self[1], self[2]);

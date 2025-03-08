@@ -2,6 +2,7 @@ use std::fmt::Display;
 
 use proc_macro::{Ident, Span};
 use quote::{ToTokens, format_ident, quote};
+use render_common::format::AttributeType;
 
 #[derive(Clone, Debug)]
 #[expect(dead_code)]
@@ -33,16 +34,31 @@ pub struct Uniform {
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderType {
-    Primative(ShaderPrimatives),
-    Object(ShaderObjects),
+    Void,
+    Primative(AttributeType),
+    Struct(ShaderStruct),
 }
 
-#[allow(dead_code)]
 impl ShaderType {
-    pub fn get_member(&self, name: &Ident) -> Option<ShaderType> {
-        match self {
-            Self::Primative(_) => None,
-            Self::Object(o) => o.get_member(name),
+    pub fn from(val: &str, structs: &[ShaderStruct]) -> Option<Self> {
+        if val == "void" {
+            Some(ShaderType::Void)
+        } else if let Some(s) = structs.iter().find(|s| s.name.to_string() == val) {
+            Some(ShaderType::Struct(s.clone()))
+        } else {
+            Some(ShaderType::Primative(match val {
+                "int" => AttributeType::I32,
+                "uint" => AttributeType::U32,
+                "float" => AttributeType::F32,
+                "vec2" => AttributeType::F32F32,
+                "vec3" => AttributeType::F32F32F32,
+                "vec4" => AttributeType::F32F32F32F32,
+                "mat4" => AttributeType::F32x4x4,
+                "ivec2" => AttributeType::I32I32,
+                "ivec3" => AttributeType::I32I32I32,
+                "ivec4" => AttributeType::I32I32I32I32,
+                _ => return None,
+            }))
         }
     }
 }
@@ -50,8 +66,29 @@ impl ShaderType {
 impl Display for ShaderType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ShaderType::Primative(p) => write!(f, "{}", p),
-            ShaderType::Object(o) => write!(f, "{}", o),
+            ShaderType::Void => write!(f, "void"),
+            ShaderType::Primative(t) => {
+                use AttributeType::*;
+                write!(
+                    f,
+                    "{}",
+                    match t {
+                        I32 => "int",
+                        U32 => "uint",
+                        F32 => "float",
+                        F64 => "double",
+                        F32F32 => "vec2",
+                        F32F32F32 => "vec3",
+                        F32F32F32F32 => "vec4",
+                        I32I32 => "ivec2",
+                        I32I32I32 => "ivec3",
+                        I32I32I32I32 => "ivec4",
+                        F32x4x4 => "mat4",
+                        _ => todo!("Convert {:?} to GLSL", t),
+                    }
+                )
+            }
+            ShaderType::Struct(s) => write!(f, "{}", s.name),
         }
     }
 }
@@ -59,251 +96,24 @@ impl Display for ShaderType {
 impl ToTokens for ShaderType {
     fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
         match self {
-            ShaderType::Primative(p) => p.to_tokens(tokens),
-            ShaderType::Object(o) => o.to_tokens(tokens),
-        }
-    }
-}
-
-impl std::ops::Mul for ShaderType {
-    type Output = Result<Self, String>;
-    fn mul(self, rhs: Self) -> Self::Output {
-        if let Self::Object(ShaderObjects::Custom(_)) = &self {
-            return Err("Can't multiply custom objects".to_string());
-        }
-
-        if let Self::Object(ShaderObjects::Custom(_)) = rhs {
-            if let Self::Primative(_) = rhs {
-                return Err("Can't multiply custom objects".to_string());
-            }
-        }
-
-        if self == rhs {
-            return Ok(self);
-        }
-
-        if let Self::Object(o) = &self {
-            use ShaderObjects::*;
-            use ShaderPrimatives::*;
-            match o {
-                Vec2 | Vec3 | Vec4 => match rhs {
-                    Self::Primative(Float) | Self::Primative(Int) | Self::Primative(Double) => {
-                        return Ok(self);
-                    }
-                    _ => {
-                        return Err(format!(
-                            "Invalid multiplication between {} and {}",
-                            self, rhs,
-                        ));
-                    }
-                },
-                Mat2 => match rhs {
-                    Self::Primative(Float) | Self::Primative(Int) | Self::Primative(Double) => {
-                        return Ok(self);
-                    }
-                    Self::Object(Vec2) => return Ok(rhs),
-                    _ => {
-                        return Err(format!(
-                            "Invalid multiplication between {} and {}",
-                            self, rhs,
-                        ));
-                    }
-                },
-                Mat3 => match rhs {
-                    Self::Primative(Float) | Self::Primative(Int) | Self::Primative(Double) => {
-                        return Ok(self);
-                    }
-                    Self::Object(Vec3) => return Ok(rhs),
-                    _ => {
-                        return Err(format!(
-                            "Invalid multiplication between {} and {}",
-                            self, rhs,
-                        ));
-                    }
-                },
-                Mat4 => match rhs {
-                    Self::Primative(Float) | Self::Primative(Int) | Self::Primative(Double) => {
-                        return Ok(self);
-                    }
-                    Self::Object(Vec4) => return Ok(rhs),
-                    _ => {
-                        return Err(format!(
-                            "Invalid multiplication between {} and {}",
-                            self, rhs,
-                        ));
-                    }
-                },
-                _ => {}
-            }
-        }
-
-        Ok(self)
-    }
-}
-
-impl std::ops::Div for ShaderType {
-    type Output = Result<Self, String>;
-
-    fn div(self, _rhs: Self) -> Self::Output {
-        todo!()
-    }
-}
-
-impl std::ops::Add for ShaderType {
-    type Output = Result<Self, String>;
-
-    fn add(self, _rhs: Self) -> Self::Output {
-        todo!()
-    }
-}
-
-impl std::ops::Sub for ShaderType {
-    type Output = Result<Self, String>;
-
-    fn sub(self, _rhs: Self) -> Self::Output {
-        todo!()
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ShaderPrimatives {
-    Void,
-    Bool,
-    Int,
-    UInt,
-    Float,
-    Double,
-}
-
-impl ToTokens for ShaderPrimatives {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        match self {
-            ShaderPrimatives::Void => tokens.extend(quote! {()}),
-            ShaderPrimatives::Bool => tokens.extend(quote! {bool}),
-            ShaderPrimatives::Int => tokens.extend(quote! {i32}),
-            ShaderPrimatives::UInt => tokens.extend(quote! {u32}),
-            ShaderPrimatives::Float => tokens.extend(quote! {f32}),
-            ShaderPrimatives::Double => tokens.extend(quote! {f64}),
-        }
-    }
-}
-
-impl Display for ShaderPrimatives {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            match self {
-                ShaderPrimatives::Void => "void",
-                ShaderPrimatives::Bool => "bool",
-                ShaderPrimatives::Int => "int",
-                ShaderPrimatives::UInt => "uint",
-                ShaderPrimatives::Float => "float",
-                ShaderPrimatives::Double => "double",
-            }
-        )
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum ShaderObjects {
-    Vec2,
-    IVec2,
-    Vec3,
-    IVec3,
-    Vec4,
-    IVec4,
-    Mat2,
-    Mat3,
-    Mat4,
-    Custom(ShaderStruct),
-}
-
-#[allow(dead_code)]
-impl ShaderObjects {
-    fn vec_swizzle(len: usize, name: &str) -> Option<ShaderType> {
-        let mut chars = vec!['x', 'r'];
-        if len > 1 {
-            chars.push('y');
-            chars.push('g');
-        }
-
-        if len > 2 {
-            chars.push('z');
-            chars.push('b');
-        }
-
-        if len > 3 {
-            chars.push('w');
-            chars.push('a');
-        }
-
-        if !name.chars().all(|c| chars.contains(&c)) {
-            panic!("Invalid swizzle for vec{}: {}", len, name);
-        }
-
-        Some(match len {
-            1 => ShaderType::Primative(ShaderPrimatives::Float),
-            2 => ShaderType::Object(ShaderObjects::Vec2),
-            3 => ShaderType::Object(ShaderObjects::Vec3),
-            4 => ShaderType::Object(ShaderObjects::Vec4),
-            _ => return None,
-        })
-    }
-
-    pub fn get_member(&self, name: &Ident) -> Option<ShaderType> {
-        let name = name.to_string();
-        let name = name.as_str();
-
-        match self {
-            Self::Vec2 => Self::vec_swizzle(2, name),
-            Self::Vec3 => Self::vec_swizzle(3, name),
-            Self::Vec4 => Self::vec_swizzle(4, name),
-            // TODO: Matricies
-            Self::Custom(s) => s.fields.iter().find_map(|f| {
-                if f.name.to_string() == *name {
-                    Some(f.t.clone())
-                } else {
-                    None
+            Self::Primative(t) => {
+                use AttributeType::*;
+                match t {
+                    I32 => tokens.extend(quote! {i32}),
+                    U32 => tokens.extend(quote! {u32}),
+                    F32 => tokens.extend(quote! {f32}),
+                    F32F32 => tokens.extend(quote! {[f32; 2]}),
+                    F32F32F32 => tokens.extend(quote! {[f32; 3]}),
+                    F32F32F32F32 => tokens.extend(quote! {[f32; 4]}),
+                    I32I32 => tokens.extend(quote! {[i32; 2]}),
+                    I32I32I32 => tokens.extend(quote! {[i32; 3]}),
+                    I32I32I32I32 => tokens.extend(quote! {[i32; 4]}),
+                    F32x4x4 => tokens.extend(quote! {[[f32; 4]; 4]}),
+                    _ => todo!("Convert {:?} to rust type", t),
                 }
-            }),
-            _ => None,
-        }
-    }
-}
-
-impl Display for ShaderObjects {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ShaderObjects::Vec2 => write!(f, "vec2"),
-            ShaderObjects::IVec2 => write!(f, "ivec2"),
-            ShaderObjects::Vec3 => write!(f, "vec3"),
-            ShaderObjects::IVec3 => write!(f, "ivec3"),
-            ShaderObjects::Vec4 => write!(f, "vec4"),
-            ShaderObjects::IVec4 => write!(f, "ivec4"),
-            ShaderObjects::Mat2 => write!(f, "mat2"),
-            ShaderObjects::Mat3 => write!(f, "mat3"),
-            ShaderObjects::Mat4 => write!(f, "mat4"),
-            ShaderObjects::Custom(s) => write!(f, "{}", s.name),
-        }
-    }
-}
-
-impl ToTokens for ShaderObjects {
-    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
-        match self {
-            ShaderObjects::Vec2 => tokens.extend(quote! { [f32; 2] }),
-            ShaderObjects::IVec2 => tokens.extend(quote! { [i32; 2] }),
-            ShaderObjects::Vec3 => tokens.extend(quote! { [f32; 3] }),
-            ShaderObjects::IVec3 => tokens.extend(quote! { [i32; 3] }),
-            ShaderObjects::Vec4 => tokens.extend(quote! { [f32; 4] }),
-            ShaderObjects::IVec4 => tokens.extend(quote! { [i32; 4] }),
-            ShaderObjects::Mat2 => tokens.extend(quote! { [[f32; 2]; 2] }),
-            ShaderObjects::Mat3 => tokens.extend(quote! { [[f32; 3]; 3] }),
-            ShaderObjects::Mat4 => tokens.extend(quote! { [[f32; 4]; 4] }),
-            ShaderObjects::Custom(s) => {
-                panic!("Can't convert glsl struct {} to a rust type", s.name);
             }
+            Self::Void => tokens.extend(quote! {()}),
+            _ => panic!("Attempted to convert struct to rust type"),
         }
     }
 }

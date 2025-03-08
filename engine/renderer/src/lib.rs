@@ -1,8 +1,16 @@
 #![feature(duration_millis_float)]
 
-use glutin::{config::ConfigTemplateBuilder, display::GetGlDisplay, surface::GlSurface};
+use glutin::{
+    config::{Api, ConfigTemplateBuilder},
+    context::Version,
+    display::GetGlDisplay,
+    surface::GlSurface,
+};
 use glutin_winit::DisplayBuilder;
-use std::{ffi::CString, num::NonZeroU32};
+use std::{
+    ffi::{CStr, CString},
+    num::NonZeroU32,
+};
 use winit::{
     event_loop::{ActiveEventLoop, ControlFlow, EventLoop},
     window::Window,
@@ -16,8 +24,12 @@ mod uniforms;
 pub mod bounds;
 pub mod buffers;
 pub mod camera;
+pub mod fence;
+pub mod indices;
+pub mod material;
 pub mod math;
 pub mod mesh;
+pub mod object;
 pub mod vertex;
 
 pub use enums::*;
@@ -95,12 +107,16 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
             .unwrap()
     };
 
-    let context_attributes = glutin::context::ContextAttributesBuilder::new().build(Some(
-        window
-            .window_handle()
-            .expect("Failed to get window handle")
-            .into(),
-    ));
+    let context_attributes = glutin::context::ContextAttributesBuilder::new()
+        .with_context_api(glutin::context::ContextApi::OpenGl(Some(Version::new(
+            4, 6,
+        ))))
+        .build(Some(
+            window
+                .window_handle()
+                .expect("Failed to get window handle")
+                .into(),
+        ));
 
     let gl_context = unsafe {
         gl_config
@@ -118,6 +134,12 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
         let symbol = CString::new(symbol).unwrap();
         display.get_proc_address(symbol.as_c_str()).cast()
     });
+
+    unsafe {
+        let ptr = gl::GetString(gl::VERSION) as *const i8;
+        let c_str = CStr::from_ptr(ptr);
+        println!("OpenGL version: {}", c_str.to_str().unwrap());
+    };
 
     let swap_interval = glutin::surface::SwapInterval::DontWait;
 
@@ -162,12 +184,13 @@ extern "system" fn gl_error_callback(
     message: *const i8,
     _user_param: *mut std::ffi::c_void,
 ) {
-    let v = unsafe { std::slice::from_raw_parts(message as *const u8, length as usize) };
-    let message = String::from_utf8_lossy(v);
-
-    if ty != gl::DEBUG_TYPE_ERROR {
+    // Ignore buffer storage location notif
+    if id == 131185 {
         return;
     }
+
+    let v = unsafe { std::slice::from_raw_parts(message as *const u8, length as usize) };
+    let message = String::from_utf8_lossy(v);
 
     let source = match source {
         gl::DEBUG_SOURCE_API => "API",
@@ -199,7 +222,7 @@ extern "system" fn gl_error_callback(
     };
 
     eprintln!(
-        "OpenGL Error: {} | {} | {} | {} | {}",
+        "OpenGL: {} | {} | {} | {} | {}",
         source, ty, id, severity, message
     );
 }

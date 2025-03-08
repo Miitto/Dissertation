@@ -1,5 +1,5 @@
 use clap::Parser;
-use renderer::{Renderable, State, make_event_loop, make_window};
+use renderer::{Renderable, State, camera::CameraManager, make_event_loop, make_window};
 use tests::{Scene, Test};
 use winit::{
     application::ApplicationHandler,
@@ -13,6 +13,7 @@ mod binary;
 mod chunks;
 mod common;
 mod tests;
+mod tri;
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -36,6 +37,10 @@ struct Args {
     /// Frustum Culling
     #[arg(short, long, default_value = "false")]
     frustum_cull: bool,
+
+    /// Combine Draw calls using SSBO
+    #[arg(short, long, default_value = "false")]
+    combine: bool,
 }
 
 fn main() {
@@ -46,29 +51,29 @@ fn main() {
     let event_loop = make_event_loop();
 
     let mut app = App::new(args);
-    // optick::start_capture();
     let _ = event_loop.run_app(&mut app);
-    // optick::stop_capture(name);
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
 }
 
 struct App {
-    state: State,
+    state: Option<State>,
     setup: Option<Box<dyn Renderable>>,
     args: Args,
 }
 
 impl App {
     fn new(args: Args) -> Self {
-        let state = State::default();
-
         Self {
-            state,
+            state: None,
             setup: None,
             args,
         }
+    }
+
+    fn state(&mut self) -> &mut State {
+        self.state.as_mut().unwrap()
     }
 }
 
@@ -76,12 +81,16 @@ impl ApplicationHandler for App {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         let display = make_window(event_loop);
 
+        if self.state.is_none() {
+            self.state = Some(State::default());
+        }
+
         let size = display.get_window().inner_size();
-        self.state
+        self.state()
             .cameras
             .on_window_resize(size.width as f32, size.height as f32);
 
-        self.state.new_window(display);
+        self.state().new_window(display);
     }
 
     fn device_event(
@@ -95,14 +104,14 @@ impl ApplicationHandler for App {
                 if delta.0 == 0.0 && delta.1 == 0.0 {
                     return;
                 }
-                self.state.mouse_move(delta.0 as f32, delta.1 as f32);
+                self.state().mouse_move(delta.0 as f32, delta.1 as f32);
             }
             DeviceEvent::MouseWheel { delta } => match delta {
                 MouseScrollDelta::LineDelta(_, y) => {
-                    self.state.wheel_scroll(y);
+                    self.state().wheel_scroll(y);
                 }
                 MouseScrollDelta::PixelDelta(y) => {
-                    self.state.wheel_scroll(y.y as f32);
+                    self.state().wheel_scroll(y.y as f32);
                 }
             },
             _ => (),
@@ -118,33 +127,39 @@ impl ApplicationHandler for App {
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(window_size) => {
-                self.state
+                self.state()
                     .cameras
                     .on_window_resize(window_size.width as f32, window_size.height as f32);
 
-                let display = self.state.display();
+                let display = self.state().display();
 
                 renderer::resize(&display, window_size.width, window_size.height);
             }
             WindowEvent::MouseInput { state, button, .. } => {
-                self.state.click(button, state);
+                self.state().click(button, state);
             }
             WindowEvent::KeyboardInput { event, .. } => {
                 if let PhysicalKey::Code(key) = event.physical_key {
-                    self.state.set_key(key, event);
+                    self.state().set_key(key, event);
                 }
             }
             WindowEvent::RedrawRequested => {
-                self.state.new_frame();
+                self.state().new_frame();
 
                 if self.setup.is_none() {
                     self.setup = Some(match self.args.test {
-                        Test::Greedy => Box::new(binary::greedy::setup(&self.args, &self.state))
-                            as Box<dyn Renderable>,
-                        Test::Culled => Box::new(binary::culled::setup(&self.args, &self.state))
-                            as Box<dyn Renderable>,
+                        Test::Tri => tri::setup(),
+                        Test::Greedy => Box::new(binary::greedy::setup(
+                            &self.args,
+                            self.state.as_ref().unwrap(),
+                        )) as Box<dyn Renderable>,
+                        Test::Culled => Box::new(binary::culled::setup(
+                            &self.args,
+                            self.state.as_ref().unwrap(),
+                        )) as Box<dyn Renderable>,
                         Test::Chunk => {
-                            Box::new(chunks::setup(&self.args, &self.state)) as Box<dyn Renderable>
+                            Box::new(chunks::setup(&self.args, self.state.as_ref().unwrap()))
+                                as Box<dyn Renderable>
                         }
                         Test::BasicInstanced => {
                             Box::new(basic::setup(&self.args, true)) as Box<dyn Renderable>
@@ -155,15 +170,18 @@ impl ApplicationHandler for App {
                     })
                 }
 
-                self.state.handle_input();
+                self.state().handle_input();
 
-                self.setup.as_mut().unwrap().render(&mut self.state);
+                self.setup
+                    .as_mut()
+                    .unwrap()
+                    .render(self.state.as_mut().unwrap());
 
-                self.state.cameras.render_gizmos(&self.state);
+                CameraManager::render_gizmos(self.state());
 
-                self.state.end_frame();
+                self.state().end_frame();
 
-                self.state.display().window.request_redraw();
+                self.state().display().window.request_redraw();
             }
             _ => (),
         }

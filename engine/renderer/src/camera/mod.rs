@@ -1,6 +1,7 @@
 use crate::{
-    Dir, DrawMode, DrawType, Input, State, Transform, bounds::BoundingHeirarchy, buffers::Vao,
-    draw::line::Line, mesh::Mesh,
+    Dir, DrawMode, Input, State, Transform,
+    draw::line::{self, Line},
+    mesh::{Mesh, basic::BasicMesh},
 };
 use frustum::FrustumCorners;
 use glam::{Mat4, Vec3, vec3, vec4};
@@ -30,6 +31,8 @@ pub struct CameraManager {
     active_camera: usize,
     scene_camera: usize,
     game_camera: usize,
+    base_camera_gizmo_mesh: BasicMesh<camera_gizmo::Vertex>,
+    frustum_mesh: BasicMesh<line::Vertex>,
 }
 
 impl CameraManager {
@@ -71,110 +74,42 @@ impl CameraManager {
         self.active_mut().handle_input(keys, delta);
     }
 
-    pub fn inactive(&self) -> impl Iterator<Item = &Box<dyn Camera>> {
-        self.cameras
-            .iter()
-            .enumerate()
-            .filter(|(idx, _)| {
-                *idx != self.active_camera && *idx != self.scene_camera && *idx != self.game_camera
-            })
-            .map(|(_, camera)| camera)
-    }
-
-    pub fn render_gizmos(&self, state: &State) {
-        if self.active_camera == self.game_camera {
+    pub fn render_gizmos(state: &mut State) {
+        if state.cameras.active_camera == state.cameras.game_camera {
             return;
         }
 
-        self.render_other_cameras(state);
-        self.render_game_frustum(state);
+        CameraManager::render_other_cameras(state);
+        CameraManager::render_game_frustum(state);
     }
 
-    fn render_other_cameras(&self, state: &State) {
-        let projection = self.active().get_projection().to_cols_array_2d();
-        let view = self.active().get_view().to_cols_array_2d();
+    fn render_other_cameras(state: &mut State) {
+        let projection = state.cameras.active().get_projection().to_cols_array_2d();
+        let view = state.cameras.active().get_view().to_cols_array_2d();
 
         let program = camera_gizmo::Program::get();
 
-        // 0
-        let fbl = camera_gizmo::Vertex {
-            pos: [0.25, 0.25, 0.],
-        };
-        // 1
-        let ftl = camera_gizmo::Vertex {
-            pos: [0.25, 0.75, 0.],
-        };
-        // 2
-        let ftr = camera_gizmo::Vertex {
-            pos: [0.75, 0.75, 0.],
-        };
-        // 3
-        let fbr = camera_gizmo::Vertex {
-            pos: [0.75, 0.25, 0.],
-        };
-        // 4
-        let bbl = camera_gizmo::Vertex { pos: [0., 0., 2.] };
-        // 5
-        let btl = camera_gizmo::Vertex { pos: [0., 1., 2.] };
-        // 6
-        let btr = camera_gizmo::Vertex { pos: [1., 1., 2.] };
-        // 7
-        let bbr = camera_gizmo::Vertex { pos: [1., 0., 2.] };
+        let model_mat = state.cameras.game().transform().to_mat4();
 
-        let vertices = vec![fbl, ftl, ftr, fbr, bbl, btl, btr, bbr];
+        let scaled = model_mat * Mat4::from_scale(Vec3::splat(0.25));
 
-        let indices = vec![
-            0, 1, 2, 2, 3, 0, // Front
-            7, 6, 5, 5, 4, 7, // Back
-            4, 5, 1, 1, 0, 4, // Left
-            3, 2, 6, 6, 7, 3, // Right
-            1, 5, 6, 6, 2, 1, // Top
-            4, 0, 3, 3, 7, 4, // Bottom
-        ];
-
-        let mesh = Mesh::new(
-            vertices,
-            Some(indices),
-            // Default bounds as this shouldn't be drawn with any camera that is culling
-            BoundingHeirarchy::default(),
-            DrawMode::Triangles,
-            DrawType::Static,
-        );
-
-        let pos = self.game().transform().position;
-        let model_mat = Mat4::from_rotation_translation(self.game().transform().rotation, pos);
-
-        let scaled = model_mat * Mat4::from_scale(Vec3::splat(0.1));
-
-        let model_matrix = scaled.to_cols_array_2d();
         let uniforms = camera_gizmo::Uniforms {
             viewMatrix: view,
             projectionMatrix: projection,
-            modelMatrix: model_matrix,
-            color: vec4(1., 1., 1., 1.0).to_array(),
+            modelMatrix: scaled.to_cols_array_2d(),
+            color: vec4(0.75, 0.75, 0.75, 1.0).to_array(),
         };
 
-        crate::draw::draw(&mesh, &program, &uniforms, state);
+        let frustum = state.cameras.game_frustum();
 
-        for inactive in self.inactive() {
-            let model_mat = inactive.transform().to_mat4();
-
-            let scaled = model_mat * Mat4::from_scale(Vec3::splat(0.1));
-
-            let model_matrix = scaled.to_cols_array_2d();
-            let uniforms = camera_gizmo::Uniforms {
-                viewMatrix: view,
-                projectionMatrix: projection,
-                modelMatrix: model_matrix,
-                color: vec4(0.75, 0.75, 0.75, 1.0).to_array(),
-            };
-
-            crate::draw::draw(&mesh, &program, &uniforms, state);
-        }
+        state
+            .cameras
+            .base_camera_gizmo_mesh
+            .render(&program, &uniforms, &frustum);
     }
 
-    fn render_game_frustum(&self, state: &State) {
-        let game = self.game();
+    fn render_game_frustum(state: &mut State) {
+        let game = state.cameras.game();
         let corners = game.get_frustum_corners();
 
         let color = vec3(1., 1., 1.);
@@ -197,26 +132,87 @@ impl CameraManager {
         .flat_map(|l| l.to_vertices())
         .collect();
 
-        let mesh = crate::mesh::Mesh::new(
-            lines,
-            None,
-            BoundingHeirarchy::default(),
-            DrawMode::Lines,
-            DrawType::Static,
-        );
         let program = crate::draw::line::Program::get();
 
         let uniforms = crate::draw::line::Uniforms {
-            projectionMatrix: self.active().get_projection().to_cols_array_2d(),
-            viewMatrix: self.active().get_view().to_cols_array_2d(),
+            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
+            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
         };
 
-        crate::draw::draw(&mesh, &program, &uniforms, state);
+        if let Err(e) = state.cameras.frustum_mesh.set_vertices(&lines) {
+            eprintln!("Error setting vertices: {:?}", e);
+        }
+
+        let frustum = state.cameras.game_frustum();
+
+        state
+            .cameras
+            .frustum_mesh
+            .render(&program, &uniforms, &frustum);
     }
 }
 
 impl Default for CameraManager {
     fn default() -> Self {
+        // 0
+        let fbl = camera_gizmo::Vertex {
+            pos: [-0.25, -0.25, 0.],
+        };
+        // 1
+        let ftl = camera_gizmo::Vertex {
+            pos: [-0.25, 0.25, 0.],
+        };
+        // 2
+        let ftr = camera_gizmo::Vertex {
+            pos: [0.25, 0.25, 0.],
+        };
+        // 3
+        let fbr = camera_gizmo::Vertex {
+            pos: [0.25, -0.25, 0.],
+        };
+        // 4
+        let bbl = camera_gizmo::Vertex {
+            pos: [-0.5, -0.5, 2.],
+        };
+        // 5
+        let btl = camera_gizmo::Vertex {
+            pos: [-0.5, 0.5, 2.],
+        };
+        // 6
+        let btr = camera_gizmo::Vertex {
+            pos: [0.5, 0.5, 2.],
+        };
+        // 7
+        let bbr = camera_gizmo::Vertex {
+            pos: [0.5, -0.5, 2.],
+        };
+
+        let vertices = vec![fbl, ftl, ftr, fbr, bbl, btl, btr, bbr];
+
+        let indices = vec![
+            0, 1, 2, 2, 3, 0, // Front
+            7, 6, 5, 5, 4, 7, // Back
+            4, 5, 1, 1, 0, 4, // Left
+            3, 2, 6, 6, 7, 3, // Right
+            1, 5, 6, 6, 2, 1, // Top
+            4, 0, 3, 3, 7, 4, // Bottom
+        ];
+
+        println!("Creating Camera Gizmo Mesh");
+        let gizmo_mesh = BasicMesh::from_data(
+            &vertices,
+            Some(&indices),
+            None,
+            None,
+            false,
+            false,
+            DrawMode::Triangles,
+        );
+
+        println!("Creating Frustum Mesh");
+        let size = std::mem::size_of::<[line::line::Vertex; 12]>();
+        let frustum_mesh = BasicMesh::empty(size, true, DrawMode::Lines);
+
         Self {
             cameras: vec![
                 Box::new(PerspectiveCamera::default()),
@@ -225,6 +221,8 @@ impl Default for CameraManager {
             active_camera: 0,
             scene_camera: 0,
             game_camera: 1,
+            base_camera_gizmo_mesh: gizmo_mesh,
+            frustum_mesh,
         }
     }
 }

@@ -1,9 +1,6 @@
 use proc_macro::{Diagnostic, Level};
 
-use crate::{
-    ProgramInput, ShaderInfo,
-    shader_var::{ShaderObjects, ShaderType},
-};
+use crate::{ProgramInput, ShaderInfo, shader_var::ShaderType};
 
 fn get_uniforms(info: &ShaderInfo) -> String {
     info.uniforms
@@ -63,7 +60,7 @@ pub fn vertex_shader(
     };
 
     let vertex_input = match &vertex_fn.params[0].t {
-        ShaderType::Object(ShaderObjects::Custom(s)) => s,
+        ShaderType::Struct(s) => s,
         _ => {
             panic!("Fragment function must take a struct as input");
         }
@@ -73,7 +70,7 @@ pub fn vertex_shader(
         let iter = vertex_input.fields.iter();
 
         if let Some(instance) = vertex_fn.params.get(1).map(|i| match &i.t {
-            ShaderType::Object(ShaderObjects::Custom(s)) => s,
+            ShaderType::Struct(s) => s,
             _ => {
                 panic!("Vertex function must take a struct as input");
             }
@@ -105,7 +102,7 @@ pub fn vertex_shader(
 
     let (instance_to_struct, main_instance_param) = if let Some(instance) =
         vertex_fn.params.get(1).map(|i| match &i.t {
-            ShaderType::Object(ShaderObjects::Custom(s)) => s,
+            ShaderType::Struct(s) => s,
             _ => {
                 panic!("Vertex function must take a struct as input");
             }
@@ -128,8 +125,8 @@ pub fn vertex_shader(
         (String::default(), String::default())
     };
 
-    let (out_vars, struct_to_out_assign) = match &vertex_fn.var.t {
-        ShaderType::Object(ShaderObjects::Custom(vertex_out_struct)) => {
+    let (out_vars, vertex_out_decl, struct_to_out_assign) = match &vertex_fn.var.t {
+        ShaderType::Struct(vertex_out_struct) => {
             let out_vars = vertex_out_struct
                 .fields
                 .iter()
@@ -155,11 +152,11 @@ pub fn vertex_shader(
                 .collect::<Vec<String>>()
                 .join("\n");
 
-            (out_vars, struct_to_out_assign)
+            let vertex_out_decl = format!("{} vertex_output =", vertex_fn.var.t);
+
+            (out_vars, vertex_out_decl, struct_to_out_assign)
         }
-        ShaderType::Primative(crate::shader_var::ShaderPrimatives::Void) => {
-            (String::default(), String::default())
-        }
+        ShaderType::Void => (String::default(), String::default(), String::default()),
         _ => {
             panic!(
                 "Vertex function must return void or a struct, got {:?}",
@@ -196,11 +193,11 @@ void main() {{
     {instance_to_struct}
 
     // Out
-    {} vertex_output = {}(vertex_input{});
+    {} {}(vertex_input{});
     {}
 }}"#,
         meta.version,
-        vertex_fn.var.t,
+        vertex_out_decl,
         vertex_fn.var.name,
         main_instance_param,
         struct_to_out_assign
@@ -239,7 +236,7 @@ pub fn fragment_shader(
             let frag_input = &f.t;
 
             let frag_input = match frag_input {
-                ShaderType::Object(ShaderObjects::Custom(s)) => s,
+                ShaderType::Struct(s) => s,
                 _ => {
                     panic!(
                         "Fragment function must take a struct as input, got {:?}",
@@ -281,6 +278,12 @@ pub fn fragment_shader(
 
     let out_var_type = frag_fn.var.t.to_string();
 
+    let fn_param = if in_to_struct.is_empty() {
+        String::default()
+    } else {
+        String::from("frag_input")
+    };
+
     let content = format!(
         r#"#version {}
 
@@ -307,9 +310,9 @@ void main() {{
     {in_to_struct}
 
     // Out
-    frag_output = {}(frag_input);
+    frag_output = {}({});
 }}"#,
-        meta.version, frag_fn.var.name
+        meta.version, frag_fn.var.name, fn_param
     );
 
     content

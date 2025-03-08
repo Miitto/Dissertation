@@ -1,8 +1,7 @@
 use proc_macro::{Diagnostic, Ident, Level, Span};
+use render_common::format::AttributeType;
 
-use crate::shader_var::{
-    ShaderFunction, ShaderObjects, ShaderPrimatives, ShaderStruct, ShaderType, ShaderVar, Uniform,
-};
+use crate::shader_var::{ShaderFunction, ShaderStruct, ShaderType, ShaderVar, Uniform};
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ShaderInfo {
@@ -28,41 +27,8 @@ impl ShaderInfo {
             }
         }
 
-        let primative = match ident.to_string().as_str() {
-            "void" => Some(ShaderType::Primative(ShaderPrimatives::Void)),
-            "int" => Some(ShaderType::Primative(ShaderPrimatives::Int)),
-            "uint" => Some(ShaderType::Primative(ShaderPrimatives::UInt)),
-            "float" => Some(ShaderType::Primative(ShaderPrimatives::Float)),
-            "double" => Some(ShaderType::Primative(ShaderPrimatives::Double)),
-            "bool" => Some(ShaderType::Primative(ShaderPrimatives::Bool)),
-            _ => None,
-        };
-
-        if let Some(primative) = primative {
-            return Ok(primative);
-        }
-
-        let object = match ident.to_string().as_str() {
-            "vec2" => Some(ShaderType::Object(ShaderObjects::Vec2)),
-            "ivec2" => Some(ShaderType::Object(ShaderObjects::IVec2)),
-            "vec3" => Some(ShaderType::Object(ShaderObjects::Vec3)),
-            "ivec3" => Some(ShaderType::Object(ShaderObjects::IVec3)),
-            "vec4" => Some(ShaderType::Object(ShaderObjects::Vec4)),
-            "ivec4" => Some(ShaderType::Object(ShaderObjects::IVec4)),
-            "mat2" => Some(ShaderType::Object(ShaderObjects::Mat2)),
-            "mat3" => Some(ShaderType::Object(ShaderObjects::Mat3)),
-            "mat4" => Some(ShaderType::Object(ShaderObjects::Mat4)),
-            _ => None,
-        };
-
-        if let Some(object) = object {
-            return Ok(object);
-        }
-
-        for s in &self.structs {
-            if s.name.to_string() == *ident.to_string() {
-                return Ok(ShaderType::Object(ShaderObjects::Custom(s.clone())));
-            }
+        if let Some(s) = ShaderType::from(ident.to_string().as_str(), &self.structs) {
+            return Ok(s);
         }
 
         Err(Diagnostic::spanned(
@@ -89,7 +55,7 @@ impl ShaderInfo {
             return Some(match name {
                 "Position" => ShaderVar {
                     name: Ident::new("gl_Position", Span::call_site()),
-                    t: ShaderType::Object(ShaderObjects::Vec4),
+                    t: ShaderType::Primative(AttributeType::F32F32F32F32),
                     type_span: None,
                 },
                 _ => {

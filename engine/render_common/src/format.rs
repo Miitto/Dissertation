@@ -1,8 +1,21 @@
 use std::mem;
 
-use gl::INT_VEC3;
+// From https://github.com/glium/glium/blob/master/src/vertex/mod.rs
 
-use super::Attribute;
+/// Trait for types that can be used as vertex attributes.
+///
+/// # Safety
+///
+pub unsafe trait Attribute: Sized {
+    /// The type of data.
+    const TYPE: AttributeType;
+
+    #[inline]
+    /// Get the type of data.
+    fn get_type() -> AttributeType {
+        Self::TYPE
+    }
+}
 
 // From https://github.com/glium/glium/blob/master/src/vertex/format.rs
 
@@ -240,20 +253,31 @@ impl AttributeType {
             I32I32I32 => gl::INT_VEC3,
             F32F32F32F32 => gl::FLOAT_VEC4,
             I32I32I32I32 => gl::INT_VEC4,
+            F32x4x4 => gl::FLOAT_MAT4,
             _ => {
                 todo!("TODO: Convert {:?} to OpenGL type", self)
             }
         }
     }
 
-    pub fn get_gl_primative(&self) -> u32 {
+    pub const fn get_gl_primative(&self) -> u32 {
         use AttributeType::*;
         match *self {
             I32 | I32I32 | I32I32I32 | I32I32I32I32 => gl::INT,
             U32 => gl::UNSIGNED_INT,
-            F32 | F32F32 | F32F32F32 | F32F32F32F32 => gl::FLOAT,
+            F32 | F32F32 | F32F32F32 | F32F32F32F32 | F32x4x4 => gl::FLOAT,
+            _ => panic!("TODO: Convert to OpenGL type"),
+        }
+    }
+
+    pub fn slots_taken(&self) -> usize {
+        use AttributeType::*;
+        match self {
+            I32 | I32I32 | I32I32I32 | I32I32I32I32 | U32 | F32 | F32F32 | F32F32F32
+            | F32F32F32F32 => 1,
+            F32x4x4 => 4,
             _ => {
-                todo!("Convert {:?} to OpenGL primitive", self);
+                todo!("Input layout slots for {:?}", self);
             }
         }
     }
@@ -348,9 +372,11 @@ impl AttributeType {
 
 #[derive(Debug)]
 pub struct VertexAtrib {
-    pub location: usize,
-    pub ty: AttributeType,
-    pub offset: usize,
+    pub location: u32,
+    pub is_int: bool,
+    pub elements: i32,
+    pub ty: gl::types::GLenum,
+    pub offset: u32,
 }
 
 pub type VertexFormat = &'static [VertexAtrib];

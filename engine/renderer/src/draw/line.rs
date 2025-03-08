@@ -54,31 +54,6 @@ impl Line {
     }
 }
 
-impl Renderable for Line {
-    fn render(&mut self, state: &mut crate::State) {
-        let uniforms = line::Uniforms {
-            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
-            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
-        };
-
-        let vertices = self.to_vertices();
-
-        let bounds = (self as &Self).into();
-
-        let vao = crate::mesh::Mesh::new(
-            vertices,
-            None,
-            bounds,
-            crate::DrawMode::Lines,
-            crate::DrawType::Static,
-        );
-
-        let program = line::Program::get();
-
-        crate::draw::draw(&vao, &program, &uniforms, state);
-    }
-}
-
 crate::program!(line, {
     #vertex vert
     #fragment frag

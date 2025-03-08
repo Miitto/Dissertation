@@ -37,9 +37,9 @@ shaders::program!(greedy_voxel, {
         int v_y = v.v_pos.y;
         int v_z = v.v_pos.z;
 
-        uint in_x = (i.data >> 10) & 31;
-        uint in_y = (i.data >> 5) & 31;
-        uint in_z = i.data & 31;
+        int in_x = int((i.data >> 10) & 31);
+        int in_y = int((i.data >> 5) & 31);
+        int in_z = int(i.data & 31);
 
         uint direction = (i.data >> 15) & 7;
 
@@ -117,9 +117,25 @@ shaders::program!(greedy_voxel, {
 
         vec4 color = get_block_color(block_type);
 
-        int o_x = x + int(in_x) + chunk_position.x;
-        int o_y = y + int(in_y) + chunk_position.y;
-        int o_z = z + int(in_z) + chunk_position.z;
+        int c_x = chunk_position.x;
+        int c_y = chunk_position.y;
+        int c_z = chunk_position.z;
+
+        if (chunk_position.x < 0) {
+            c_x += 1;
+        }
+        if (chunk_position.y < 0) {
+            c_y += 1;
+        }
+        if (chunk_position.z < 0) {
+            c_z += 1;
+        }
+
+        int o_x = x + in_x + c_x;
+        int o_y = y + in_y + c_y;
+        int o_z = z + in_z + c_z;
+
+
 
         vec3 position = vec3(float(o_x), float(o_y), float(o_z));
 
