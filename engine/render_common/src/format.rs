@@ -282,6 +282,17 @@ impl AttributeType {
         }
     }
 
+    pub fn std140_align(&self) -> usize {
+        use AttributeType::*;
+        match self {
+            I32 | F32 | U32 => 4,
+            I32I32 | F32F32 | U32U32 => 8,
+            I32I32I32 | I32I32I32I32 | F32F32F32 | F32F32F32F32 | U32U32U32 | U32U32U32U32 => 16,
+            F32x4x4 => 64,
+            _ => todo!("{:?} to std140 alignment", self),
+        }
+    }
+
     pub fn is_integer(&self) -> bool {
         matches!(self.get_gl_primative(), gl::INT | gl::UNSIGNED_INT)
     }

@@ -1,5 +1,6 @@
 use crate::{
-    Dir, DrawMode, Input, State, Transform,
+    Dir, DrawMode, Input, State, Transform, UniformBlock, Uniforms,
+    buffers::UniformBuffer,
     draw::line::{self, Line},
     mesh::{Mesh, basic::BasicMesh},
 };
@@ -10,7 +11,8 @@ pub mod frustum;
 mod perspective;
 
 pub use perspective::PerspectiveCamera;
-use shaders::Program;
+use render_common::Program;
+use shaders::Program as _;
 use winit::keyboard::KeyCode;
 
 pub trait Camera: std::fmt::Debug {
@@ -26,6 +28,36 @@ pub trait Camera: std::fmt::Debug {
     fn forward(&self) -> Vec3;
 }
 
+#[derive(Debug)]
+pub struct CameraMatrices {
+    pub projection: [[f32; 4]; 4],
+    pub view: [[f32; 4]; 4],
+}
+
+impl CameraMatrices {
+    const SIZE: usize = 16 * 4 * 2;
+}
+
+impl UniformBlock for CameraMatrices {
+    fn bind_point() -> u32 {
+        0
+    }
+
+    fn size() -> usize {
+        Self::SIZE
+    }
+
+    fn set_buffer_data<B: crate::buffers::RawBuffer>(
+        &self,
+        buffer: &mut B,
+    ) -> Result<(), crate::buffers::BufferError> {
+        buffer.set_offset_data_no_alloc(0, &[self.projection])?;
+        buffer.set_offset_data_no_alloc(64, &[self.view])?;
+
+        Ok(())
+    }
+}
+
 pub struct CameraManager {
     cameras: Vec<Box<dyn Camera>>,
     active_camera: usize,
@@ -33,9 +65,15 @@ pub struct CameraManager {
     game_camera: usize,
     base_camera_gizmo_mesh: BasicMesh<camera_gizmo::Vertex>,
     frustum_mesh: BasicMesh<line::Vertex>,
+
+    camera_matrices_buffer: UniformBuffer<CameraMatrices>,
 }
 
 impl CameraManager {
+    pub fn bind_camera_uniforms(&self, program: &Program) {
+        self.camera_matrices_buffer.bind(program);
+    }
+
     pub fn on_window_resize(&mut self, width: f32, height: f32) {
         for camera in &mut self.cameras {
             camera.on_window_resize(width, height);
@@ -72,6 +110,15 @@ impl CameraManager {
         }
 
         self.active_mut().handle_input(keys, delta);
+
+        let matrices = CameraMatrices {
+            projection: self.active().get_projection().to_cols_array_2d(),
+            view: self.active().get_view().to_cols_array_2d(),
+        };
+
+        if let Err(e) = self.camera_matrices_buffer.set_data(&matrices) {
+            eprintln!("Error Setting CameraMatrices: {:?}", e);
+        }
     }
 
     pub fn render_gizmos(state: &mut State) {
@@ -84,9 +131,6 @@ impl CameraManager {
     }
 
     fn render_other_cameras(state: &mut State) {
-        let projection = state.cameras.active().get_projection().to_cols_array_2d();
-        let view = state.cameras.active().get_view().to_cols_array_2d();
-
         let program = camera_gizmo::Program::get();
 
         let model_mat = state.cameras.game().transform().to_mat4();
@@ -94,18 +138,17 @@ impl CameraManager {
         let scaled = model_mat * Mat4::from_scale(Vec3::splat(0.25));
 
         let uniforms = camera_gizmo::Uniforms {
-            viewMatrix: view,
-            projectionMatrix: projection,
             modelMatrix: scaled.to_cols_array_2d(),
             color: vec4(0.75, 0.75, 0.75, 1.0).to_array(),
         };
 
         let frustum = state.cameras.game_frustum();
 
-        state
-            .cameras
-            .base_camera_gizmo_mesh
-            .render(&program, &uniforms, &frustum);
+        program.bind();
+        uniforms.bind(&program);
+        state.cameras.bind_camera_uniforms(&program);
+
+        state.cameras.base_camera_gizmo_mesh.render(&frustum);
     }
 
     fn render_game_frustum(state: &mut State) {
@@ -134,10 +177,7 @@ impl CameraManager {
 
         let program = crate::draw::line::Program::get();
 
-        let uniforms = crate::draw::line::Uniforms {
-            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
-            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
-        };
+        let uniforms = crate::draw::line::Uniforms {};
 
         if let Err(e) = state.cameras.frustum_mesh.set_vertices(&lines) {
             eprintln!("Error setting vertices: {:?}", e);
@@ -145,10 +185,11 @@ impl CameraManager {
 
         let frustum = state.cameras.game_frustum();
 
-        state
-            .cameras
-            .frustum_mesh
-            .render(&program, &uniforms, &frustum);
+        program.bind();
+        uniforms.bind(&program);
+        state.cameras.bind_camera_uniforms(&program);
+
+        state.cameras.frustum_mesh.render(&frustum);
     }
 }
 
@@ -213,16 +254,32 @@ impl Default for CameraManager {
         let size = std::mem::size_of::<[line::line::Vertex; 12]>();
         let frustum_mesh = BasicMesh::empty(size, true, DrawMode::Lines);
 
+        let default_camera = Box::new(PerspectiveCamera::default());
+
+        let matrices = CameraMatrices {
+            projection: default_camera.get_projection().to_cols_array_2d(),
+            view: default_camera.get_view().to_cols_array_2d(),
+        };
+
+        let cam_buf =
+            UniformBuffer::new(matrices).expect("Failed to create camera matrices buffer");
+
+        unsafe {
+            gl::BindBufferBase(
+                gl::UNIFORM_BUFFER,
+                CameraMatrices::bind_point(),
+                cam_buf.id(),
+            )
+        }
+
         Self {
-            cameras: vec![
-                Box::new(PerspectiveCamera::default()),
-                Box::new(PerspectiveCamera::default()),
-            ],
+            cameras: vec![default_camera, Box::new(PerspectiveCamera::default())],
             active_camera: 0,
             scene_camera: 0,
             game_camera: 1,
             base_camera_gizmo_mesh: gizmo_mesh,
             frustum_mesh,
+            camera_matrices_buffer: cam_buf,
         }
     }
 }
@@ -239,13 +296,11 @@ crate::program!(camera_gizmo, {
         vec4 color;
     }
 
-    uniform mat4 projectionMatrix;
-    uniform mat4 viewMatrix;
     uniform mat4 modelMatrix;
     uniform vec4 color;
 
     v2f vert(vIn i) {
-        mat4 pv = projectionMatrix * viewMatrix;
+        mat4 pv = camera.projection * camera.view;
         mat4 mvp = pv * modelMatrix;
 
         gl_Position = mvp * vec4(i.pos, 1.0);

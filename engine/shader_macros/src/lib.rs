@@ -9,6 +9,7 @@ mod build_rust;
 mod parse;
 mod shader_info;
 mod shader_var;
+mod uniform;
 
 struct ProgramInput {
     meta: ProgramMeta,

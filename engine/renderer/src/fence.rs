@@ -57,6 +57,7 @@ impl SyncObject {
         signal
     }
 
+    #[allow(dead_code)]
     pub fn wait_gpu(&self) {
         unsafe { gl::WaitSync(self.sync, 0, gl::TIMEOUT_IGNORED) }
     }

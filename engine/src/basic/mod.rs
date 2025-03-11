@@ -134,6 +134,6 @@ impl Renderable for VoxelManager {
             projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
         };
 
-        renderer::draw::draw(mesh, &program, &uniforms, state);
+        state.draw(mesh, &program, &uniforms);
     }
 }

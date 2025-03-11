@@ -150,7 +150,14 @@ impl RawBuffer for GpuBuffer {
         T: Sized,
     {
         let size = std::mem::size_of_val(data);
-        assert!(size + offset <= self.size());
+        if size + offset > self.size() {
+            panic!(
+                "Attempted to write outside of buffer bounds | Size: {}, Offset: {}, Buffer Size: {}",
+                size,
+                offset,
+                self.size()
+            );
+        }
         assert!(size > 0);
 
         if let Some(mapping) = self.mapping {

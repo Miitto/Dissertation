@@ -1,13 +1,13 @@
 use std::{collections::HashMap, rc::Rc};
 
 use glutin::surface::GlSurface;
-use render_common::Display;
+use render_common::{Display, Program};
 use winit::{
     event::{ElementState, KeyEvent, MouseButton},
     keyboard::KeyCode,
 };
 
-use crate::{Input, PositionDelta, camera::CameraManager};
+use crate::{Input, PositionDelta, Uniforms, camera::CameraManager, mesh::Mesh, vertex::Vertex};
 
 pub struct State {
     display: Option<Rc<Display>>,
@@ -18,6 +18,20 @@ pub struct State {
 }
 
 impl State {
+    pub fn draw<M, U, V, I>(&self, mesh: &mut M, program: &Program, uniforms: &U)
+    where
+        V: Vertex,
+        I: Vertex,
+        M: Mesh<V, I>,
+        U: Uniforms,
+    {
+        program.bind();
+        uniforms.bind(program);
+        self.cameras.bind_camera_uniforms(program);
+
+        mesh.render(&self.cameras.game_frustum());
+    }
+
     pub fn display(&self) -> Rc<Display> {
         self.display
             .as_ref()

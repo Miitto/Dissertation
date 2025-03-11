@@ -1,21 +1,38 @@
 use proc_macro::{Diagnostic, Level};
+use std::fmt::Write;
 
-use crate::{ProgramInput, ShaderInfo, shader_var::ShaderType};
+use crate::{ProgramInput, ShaderInfo, shader_var::ShaderType, uniform::Uniform};
 
 fn get_uniforms(info: &ShaderInfo) -> String {
     info.uniforms
         .iter()
-        .map(|uniform| {
-            let default_value = if let Some(v) = uniform.value.as_ref() {
-                format!(" = {}", v)
-            } else {
-                "".to_string()
-            };
-            format!(
-                "uniform {} {}{};",
-                uniform.var.t, uniform.var.name, default_value
-            )
-        })
+        .map(|uniform| match uniform {
+            Uniform::Single(s) => {
+                let default_value = if let Some(v) = s.value.as_ref() {
+                    format!(" = {}", v)
+                } else {
+                    "".to_string()
+                };
+                format!("uniform {} {}{};", s.var.t, s.var.name, default_value)
+            }
+            Uniform::Block(b) => {
+                let fields = b.fields.iter().fold(String::default(), |mut s, f| {
+                    _ = writeln!(s, "\t{};", f);
+                    s
+                });
+
+                format!(
+                    "layout(std140, binding = {}) uniform {} {{\n{}}} {};",
+                    b.bind,
+                    b.name,
+                    fields,
+                    b.var_name
+                        .as_ref()
+                        .map(|i| i.to_string())
+                        .unwrap_or_default()
+                )
+            }
+        }).chain(["layout(std140, binding = 0) uniform CameraMatrices {\n\tmat4 projection;\n\tmat4 view;\n} camera;\n".to_string()])
         .collect::<Vec<String>>()
         .join("\n")
 }
@@ -212,7 +229,7 @@ pub fn fragment_shader(
         meta,
     }: &ProgramInput,
 ) -> String {
-    let uniforms = get_uniforms(info);
+    let uniforms = String::default(); // get_uniforms(info);
 
     let structs = get_structs(info);
 

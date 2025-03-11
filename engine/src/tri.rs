@@ -1,4 +1,5 @@
-use renderer::{Renderable, mesh::basic::BasicMesh};
+use glam::Mat4;
+use renderer::{Renderable, buffers::UniformBuffer, mesh::basic::BasicMesh};
 use shaders::Program;
 
 const VERTICES: [[f32; 2]; 3] = [[-0.5, -0.5], [0.0, 0.5], [0.5, -0.5]];
@@ -9,13 +10,14 @@ pub struct Triangle {
 
 impl Renderable for Triangle {
     fn render(&mut self, state: &mut renderer::State) {
-        let uniforms = triangle::Uniforms {
-            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
-            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
+        let uniforms = triangle::uniforms::Test {
+            val: Mat4::IDENTITY.to_cols_array_2d(),
         };
+
+        let uniforms = UniformBuffer::new(uniforms).unwrap();
         let program = triangle::Program::get();
 
-        renderer::draw::draw(&mut self.mesh, &program, &uniforms, state);
+        state.draw(&mut self.mesh, &program, &uniforms);
     }
 }
 
@@ -42,8 +44,10 @@ renderer::program!(triangle, {
     #vertex vert
     #fragment frag
 
-    uniform mat4 projectionMatrix;
-    uniform mat4 viewMatrix;
+    #bind 1
+    uniform Test {
+        mat4 val;
+    } test;
 
     struct vIn {
         vec2 pos;
@@ -54,11 +58,11 @@ renderer::program!(triangle, {
     }
 
     v2f vert(vIn i) {
-        mat4 vp = projectionMatrix * viewMatrix;
-        gl_Position = vp * vec4(i.pos, 1.0, 1.0);
+        mat4 vp = camera.projection * camera.view;
+        gl_Position = vp * vec4(i.pos, -1.0, 1.0);
 
         v2f o;
-        o.color = vec4(1.0, 0.0, 0.0, 1.0);
+        o.color = vec4(test.val[1].xyz, 1.0);
         return o;
     }
 

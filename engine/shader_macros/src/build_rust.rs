@@ -1,6 +1,7 @@
 use crate::{
     ProgramInput,
     shader_var::{ShaderType, ShaderVar},
+    uniform::Uniform,
 };
 use proc_macro2::Ident;
 use proc_macro2::TokenStream;
@@ -96,6 +97,13 @@ pub fn uniform_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
     let fields: Vec<proc_macro2::TokenStream> = info
         .uniforms
         .iter()
+        .filter_map(|u| {
+            if let Uniform::Single(s) = &u {
+                Some(s)
+            } else {
+                None
+            }
+        })
         .map(|uniform| {
             let name = format_ident!("{}", uniform.var.name.to_string());
             let ty = &uniform.var.t;
@@ -117,13 +125,25 @@ pub fn uniform_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
         quote! {renderer}
     };
 
-    let binds = info.uniforms.iter().map(|uniform| {
-        let name = format_ident!("{}", uniform.var.name.to_string());
-        quote! {
-            let loc = #crate_path::get_uniform_location(program, stringify!(#name));
-            self.#name.set_uniform(loc);
-        }
-    });
+    let binds = info
+        .uniforms
+        .iter()
+        .filter_map(|u| {
+            if let Uniform::Single(s) = &u {
+                Some(s)
+            } else {
+                None
+            }
+        })
+        .map(|uniform| {
+            let name = format_ident!("{}", uniform.var.name.to_string());
+            quote! {
+                let loc = #crate_path::get_uniform_location(program, stringify!(#name));
+                self.#name.set_uniform(loc);
+            }
+        });
+
+    let blocks = uniform_block_structs(input, use_crate);
 
     quote! {
         pub struct Uniforms {
@@ -139,6 +159,101 @@ pub fn uniform_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
                     #(#binds)*
             }
         }
+
+        pub mod uniforms {
+            #blocks
+        }
+    }
+}
+
+fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenStream {
+    let blocks = input
+        .content
+        .uniforms
+        .iter()
+        .filter_map(|u| {
+            if let Uniform::Block(b) = &u {
+                Some(b)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+
+    if blocks.is_empty() {
+        return quote! {};
+    }
+
+    let crate_path = if use_crate {
+        quote! {crate}
+    } else {
+        quote! {renderer}
+    };
+
+    let structs = blocks
+        .into_iter()
+        .map(|u| {
+            let name = format_ident!("{}", u.name.to_string());
+            let fields = u.fields.iter().map(|f| {
+                let ty = &f.t;
+                let name = format_ident!("{}", f.name.to_string());
+
+                quote! {#name: #ty}
+            });
+
+            let bind = u.bind;
+
+            let field_names = u.fields.iter().map(|f| {
+                format_ident!("{}", f.name.to_string())
+            });
+
+            quote! {
+                #[derive(Debug)]
+                pub struct #name {
+                    #(pub #fields),*
+                }
+
+                impl #name {
+                    const BIND: u32 = #bind;
+                    const SIZE: usize = std::mem::size_of::<[[f32; 4]; 4]>();
+                }
+
+                impl ::#crate_path::UniformBlock for #name {
+                    fn bind_point() -> u32 {
+                        Self::BIND
+                    }
+
+                    fn size() -> usize {
+                        Self::SIZE
+                    }
+
+                    fn set_buffer_data<B: ::#crate_path::buffers::RawBuffer>(&self, buffer: &mut B) -> Result<(), ::#crate_path::buffers::BufferError> {
+                        let fields = [#(self.#field_names),*];
+
+                        let mut offset = 0;
+
+                        const fn attr_type_of_val<T: #crate_path::vertex::Attribute>(_: &T)
+                                -> ::#crate_path::vertex::format::AttributeType
+                            {
+                                <T as ::#crate_path::vertex::Attribute>::TYPE
+                            }
+
+
+                        for field in fields {
+                            buffer.set_offset_data_no_alloc(offset, &[field])?;
+                            let align = attr_type_of_val(&field).std140_align();
+                            offset += align;
+                        }
+
+                        Ok(())
+                    }
+                }
+            }
+        })
+        .collect::<Vec<_>>();
+
+    quote! {
+        #(#structs)*
     }
 }
 

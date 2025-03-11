@@ -26,12 +26,6 @@ impl ToTokens for ShaderVar {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct Uniform {
-    pub var: ShaderVar,
-    pub value: Option<String>,
-}
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum ShaderType {
     Void,

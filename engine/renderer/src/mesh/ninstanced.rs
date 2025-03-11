@@ -147,12 +147,7 @@ where
         self.indices.is_some()
     }
 
-    fn render<U: crate::Uniforms>(
-        &mut self,
-        program: &render_common::Program,
-        uniforms: &U,
-        frustum: &crate::camera::frustum::Frustum,
-    ) {
+    fn render(&mut self, frustum: &crate::camera::frustum::Frustum) {
         if self.instance_buffers.is_empty() {
             return;
         }
@@ -160,9 +155,6 @@ where
         if self.frustum_cull && !self.is_on_frustum(frustum) {
             return;
         }
-
-        program.bind();
-        uniforms.bind(program);
 
         let vertex_count = self.vertex_count() as i32;
         let mode = self.draw_mode().into();

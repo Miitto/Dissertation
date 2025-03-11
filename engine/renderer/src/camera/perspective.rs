@@ -1,4 +1,4 @@
-use glam::{DQuat, EulerRot, Mat4, Quat, Vec3, vec3};
+use glam::{EulerRot, Mat4, Quat, Vec3};
 use winit::keyboard::KeyCode;
 
 use crate::{Input, Transform, math::perspective};
@@ -30,7 +30,7 @@ impl Default for PerspectiveCamera {
             near: 0.1,
             far: 1000.0,
             speed: 0.01,
-            key_sensitivity: 0.1,
+            key_sensitivity: 0.025,
             mouse_sensitivity: 0.01,
             invert_mouse: false,
         }

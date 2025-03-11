@@ -1,10 +1,7 @@
 #![feature(duration_millis_float)]
 
 use glutin::{
-    config::{Api, ConfigTemplateBuilder},
-    context::Version,
-    display::GetGlDisplay,
-    surface::GlSurface,
+    config::ConfigTemplateBuilder, context::Version, display::GetGlDisplay, surface::GlSurface,
 };
 use glutin_winit::DisplayBuilder;
 use std::{

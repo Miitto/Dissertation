@@ -1,7 +1,7 @@
 use glam::Vec3;
 use shaders::Program as _;
 
-pub use line::{Program, Uniforms, Vertex};
+pub use line::{Program, Uniforms, Vertex, uniforms};
 
 use crate::{
     Renderable,
@@ -67,11 +67,8 @@ crate::program!(line, {
         vec3 color;
     }
 
-    uniform mat4 viewMatrix;
-    uniform mat4 projectionMatrix;
-
     v2f vert(vIn i) {
-        mat4 pv = projectionMatrix * viewMatrix;
+        mat4 pv = camera.projection * camera.view;
 
         gl_Position = pv * vec4(i.pos, 1.0);
 

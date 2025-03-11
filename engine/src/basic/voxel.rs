@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
-use glam::{IVec3, Mat4, Vec3, mat4, vec4};
-use renderer::{Renderable, State, draw::draw, mesh::basic::BasicMesh};
+use glam::{IVec3, Mat4, mat4, vec4};
+use renderer::{Renderable, State, mesh::basic::BasicMesh};
 use shaders::Program;
 
 use crate::common::BlockType;
@@ -98,7 +98,7 @@ impl Renderable for Voxel {
 
         let program = basic_voxel::Program::get();
 
-        draw(&mut *self.mesh.borrow_mut(), &program, &uniforms, state);
+        state.draw(&mut *self.mesh.borrow_mut(), &program, &uniforms);
     }
 }
 

@@ -25,5 +25,5 @@ where
     fn is_instanced(&self) -> bool;
     fn has_indices(&self) -> bool;
 
-    fn render<U: Uniforms>(&mut self, program: &Program, uniforms: &U, frustum: &Frustum);
+    fn render(&mut self, frustum: &Frustum);
 }

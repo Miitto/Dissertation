@@ -119,7 +119,7 @@ impl Renderable for ChunkManager {
 
             let program = greedy_voxel::Program::get();
 
-            draw::draw(mesh, &program, &uniforms, state)
+            state.draw(mesh, &program, &uniforms)
         }
     }
 }
