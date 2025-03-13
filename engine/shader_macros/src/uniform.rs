@@ -22,6 +22,7 @@ pub struct UniformBlock {
     pub var_name: Option<Ident>,
 }
 
+#[expect(dead_code)]
 impl Uniform {
     pub fn name(&self) -> &Ident {
         match self {

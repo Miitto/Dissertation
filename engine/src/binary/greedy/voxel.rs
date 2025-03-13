@@ -8,9 +8,6 @@ shaders::program!(greedy_voxel, {
     #vertex vert
     #fragment frag
 
-    uniform mat4 projectionMatrix;
-    uniform mat4 viewMatrix;
-
     uniform ivec3 chunk_position;
 
     #include "shaders/lighting.glsl"
@@ -31,7 +28,7 @@ shaders::program!(greedy_voxel, {
     v2f vert(vIn v, iIn i) {
         v2f o;
 
-        mat4 vp = projectionMatrix * viewMatrix;
+        mat4 vp = camera.projection * camera.viewMatrix;
 
         int v_x = v.v_pos.x;
         int v_y = v.v_pos.y;

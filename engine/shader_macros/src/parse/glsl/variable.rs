@@ -1,7 +1,7 @@
-use proc_macro::{Delimiter, Diagnostic, Level, Span, TokenTree};
+use proc_macro::{Diagnostic, Level, TokenTree};
 
 use crate::Result;
-use crate::parse::{Delimited, ident_any, punct};
+use crate::parse::ident_any;
 
 use crate::{shader_info::ShaderInfo, shader_var::ShaderVar};
 

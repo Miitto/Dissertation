@@ -1,4 +1,4 @@
-use proc_macro::{Delimiter, Diagnostic, Level, Span, TokenTree};
+use proc_macro::{Delimiter, Diagnostic, Level, TokenTree};
 
 use crate::Result;
 use crate::parse::{Delimited, ident, ident_any, punct};
@@ -7,7 +7,7 @@ use super::parse_var;
 use crate::{
     parse::delimited,
     shader_info::ShaderInfo,
-    shader_var::{ShaderFunction, ShaderStruct, ShaderVar},
+    shader_var::{ShaderStruct, ShaderVar},
 };
 pub fn parse_struct<'a>(
     input: &'a [TokenTree],

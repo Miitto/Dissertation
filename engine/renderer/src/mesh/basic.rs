@@ -1,5 +1,3 @@
-use render_common::Program;
-
 use crate::{
     DrawMode,
     bounds::{BoundingHeirarchy, BoundingVolume},

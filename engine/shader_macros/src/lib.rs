@@ -19,7 +19,9 @@ struct ProgramInput {
 type Result<I, C, E = ()> = core::result::Result<(I, C), E>;
 
 fn abandon(name: proc_macro2::Ident) -> TokenStream {
-    quote! {pub mod #name {} pub struct Instance; pub struct Vertex; pub struct Program;}.into()
+    quote! {
+    pub mod #name { pub struct Instance; pub struct Vertex; pub struct Program; compile_error!("Abandoned building {}", #name);}}
+    .into()
 }
 
 #[proc_macro]

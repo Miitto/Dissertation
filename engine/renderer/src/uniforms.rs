@@ -1,6 +1,6 @@
 use std::ffi::CString;
 
-use render_common::{Program, UniformValue};
+use render_common::Program;
 
 use crate::buffers::{BufferError, RawBuffer};
 

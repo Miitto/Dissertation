@@ -1,8 +1,7 @@
-use proc_macro::{Diagnostic, Ident, Level, Span};
-use render_common::format::AttributeType;
+use proc_macro::{Diagnostic, Ident, Level};
 
 use crate::{
-    shader_var::{ShaderFunction, ShaderStruct, ShaderType, ShaderVar},
+    shader_var::{ShaderFunction, ShaderStruct, ShaderType},
     uniform::Uniform,
 };
 

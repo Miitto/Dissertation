@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use chunk::Chunk;
 use glam::{ivec3, vec3, vec4};
 use renderer::{
-    DrawMode, Renderable, State, bounds::BoundingHeirarchy, draw, mesh::ninstanced::NInstancedMesh,
+    DrawMode, Renderable, State, bounds::BoundingHeirarchy, mesh::ninstanced::NInstancedMesh,
 };
 use voxel::greedy_voxel;
 
@@ -70,6 +70,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
     manager
 }
 
+#[allow(dead_code)]
 pub struct ChunkManager {
     chunks: HashMap<[i32; 3], chunk::Chunk>,
     mesh: NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>,
@@ -110,8 +111,6 @@ impl Renderable for ChunkManager {
 
             let uniforms = greedy_voxel::Uniforms {
                 chunk_position: ipos.to_array(),
-                viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
-                projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
                 sky_light_color: vec4(1.0, 1.0, 1.0, 1.0).to_array(),
                 sky_light_direction: vec3(-1.0, -1.0, -1.0).normalize().to_array(),
                 ambient_light: 0.5,
