@@ -244,6 +244,7 @@ impl AttributeType {
     pub fn get_gl_type(&self) -> u32 {
         use AttributeType::*;
         match *self {
+            I8 => gl::BYTE,
             I32 => gl::INT,
             U32 => gl::UNSIGNED_INT,
             F32 => gl::FLOAT,
@@ -263,7 +264,7 @@ impl AttributeType {
     pub const fn get_gl_primative(&self) -> u32 {
         use AttributeType::*;
         match *self {
-            I32 | I32I32 | I32I32I32 | I32I32I32I32 => gl::INT,
+            I8 | I32 | I32I32 | I32I32I32 | I32I32I32I32 => gl::INT,
             U32 => gl::UNSIGNED_INT,
             F32 | F32F32 | F32F32F32 | F32F32F32F32 | F32x4x4 => gl::FLOAT,
             _ => panic!("TODO: Convert to OpenGL type"),
@@ -273,7 +274,7 @@ impl AttributeType {
     pub fn slots_taken(&self) -> usize {
         use AttributeType::*;
         match self {
-            I32 | I32I32 | I32I32I32 | I32I32I32I32 | U32 | F32 | F32F32 | F32F32F32
+            I8 | I32 | I32I32 | I32I32I32 | I32I32I32I32 | U32 | F32 | F32F32 | F32F32F32
             | F32F32F32F32 => 1,
             F32x4x4 => 4,
             _ => {
@@ -285,6 +286,7 @@ impl AttributeType {
     pub fn std140_align(&self) -> usize {
         use AttributeType::*;
         match self {
+            I8 => 1,
             I32 | F32 | U32 => 4,
             I32I32 | F32F32 | U32U32 => 8,
             I32I32I32 | I32I32I32I32 | F32F32F32 | F32F32F32F32 | U32U32U32 | U32U32U32U32 => 16,

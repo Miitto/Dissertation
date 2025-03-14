@@ -1,7 +1,4 @@
-use std::{
-    ffi::{CStr, CString},
-    marker::PhantomData,
-};
+use std::marker::PhantomData;
 
 use render_common::Program;
 
@@ -22,7 +19,7 @@ where
     U: UniformBlock,
 {
     pub fn new(uniforms: U) -> Result<Self, BufferError> {
-        println!("Creating Uniform buffer with size: {}", U::size());
+        // println!("Creating Uniform buffer with size: {}", U::size());
         let mut buffer = FencedRawBuffer::empty(U::size(), BufferMode::Persistent)?;
 
         uniforms.set_buffer_data(&mut buffer)?;

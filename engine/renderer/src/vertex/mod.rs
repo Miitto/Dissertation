@@ -1,4 +1,3 @@
-use format::AttributeType;
 
 pub use render_common::format;
 

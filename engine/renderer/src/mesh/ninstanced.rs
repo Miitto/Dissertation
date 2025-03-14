@@ -26,6 +26,22 @@ where
     V: Vertex,
     I: Vertex,
 {
+    pub fn from_vbo(vbo: Vbo<V>, draw_mode: DrawMode) -> Self {
+        let vao = Vao::new(draw_mode);
+
+        vao.setup_vertices(&vbo);
+
+        Self {
+            vbo,
+            instance_buffers: vec![],
+            indices: None,
+            bounds: BoundingHeirarchy::default(),
+            vao,
+            setup_instances: false,
+            frustum_cull: false,
+        }
+    }
+
     pub fn with_vertices(
         verts: &[V],
         indices: Option<&[u32]>,
@@ -80,7 +96,7 @@ where
 
         let buf = &self.instance_buffers[0];
         if !self.setup_instances {
-            println!("Setting up instances");
+            // println!("Setting up instances");
             self.vao.setup_instances(buf);
         }
 

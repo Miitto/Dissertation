@@ -2,7 +2,7 @@ use std::{any::TypeId, cell::RefCell, collections::HashMap, rc::Rc};
 
 use render_common::make_program;
 pub use render_common::shaders::ProgramInternal;
-pub use shader_macros::program;
+pub use shader_macros::{program, snippet};
 
 thread_local! {
 static PROGRAMS: RefCell<HashMap<TypeId, Rc<render_common::Program>>> =

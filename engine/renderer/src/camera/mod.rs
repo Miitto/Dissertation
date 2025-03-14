@@ -28,36 +28,6 @@ pub trait Camera: std::fmt::Debug {
     fn forward(&self) -> Vec3;
 }
 
-#[derive(Debug)]
-pub struct CameraMatrices {
-    pub projection: [[f32; 4]; 4],
-    pub view: [[f32; 4]; 4],
-}
-
-impl CameraMatrices {
-    const SIZE: usize = 16 * 4 * 2;
-}
-
-impl UniformBlock for CameraMatrices {
-    fn bind_point() -> u32 {
-        0
-    }
-
-    fn size() -> usize {
-        Self::SIZE
-    }
-
-    fn set_buffer_data<B: crate::buffers::RawBuffer>(
-        &self,
-        buffer: &mut B,
-    ) -> Result<(), crate::buffers::BufferError> {
-        buffer.set_offset_data_no_alloc(0, &[self.projection])?;
-        buffer.set_offset_data_no_alloc(64, &[self.view])?;
-
-        Ok(())
-    }
-}
-
 pub struct CameraManager {
     cameras: Vec<Box<dyn Camera>>,
     active_camera: usize,
@@ -66,7 +36,7 @@ pub struct CameraManager {
     base_camera_gizmo_mesh: BasicMesh<camera_gizmo::Vertex>,
     frustum_mesh: BasicMesh<line::Vertex>,
 
-    camera_matrices_buffer: UniformBuffer<CameraMatrices>,
+    camera_matrices_buffer: UniformBuffer<camera_matrices::uniforms::CameraMatrices>,
 }
 
 impl CameraManager {
@@ -111,9 +81,13 @@ impl CameraManager {
 
         self.active_mut().handle_input(keys, delta);
 
-        let matrices = CameraMatrices {
-            projection: self.active().get_projection().to_cols_array_2d(),
-            view: self.active().get_view().to_cols_array_2d(),
+        let active = self.active();
+        let view = active.get_view();
+
+        let matrices = camera_matrices::uniforms::CameraMatrices {
+            projection: active.get_projection().to_cols_array_2d(),
+            view: view.to_cols_array_2d(),
+            inverse_view: view.inverse().to_cols_array_2d(),
         };
 
         if let Err(e) = self.camera_matrices_buffer.set_data(&matrices) {
@@ -256,9 +230,12 @@ impl Default for CameraManager {
 
         let default_camera = Box::new(PerspectiveCamera::default());
 
-        let matrices = CameraMatrices {
+        let view = default_camera.get_view();
+
+        let matrices = camera_matrices::uniforms::CameraMatrices {
             projection: default_camera.get_projection().to_cols_array_2d(),
-            view: default_camera.get_view().to_cols_array_2d(),
+            view: view.to_cols_array_2d(),
+            inverse_view: view.inverse().to_cols_array_2d(),
         };
 
         let cam_buf =
@@ -267,7 +244,7 @@ impl Default for CameraManager {
         unsafe {
             gl::BindBufferBase(
                 gl::UNIFORM_BUFFER,
-                CameraMatrices::bind_point(),
+                camera_matrices::uniforms::CameraMatrices::bind_point(),
                 cam_buf.id(),
             )
         }
@@ -296,11 +273,13 @@ crate::program!(camera_gizmo, {
         vec4 color;
     }
 
+    #snippet crate::camera_matrices
+
     uniform mat4 modelMatrix;
     uniform vec4 color;
 
     v2f vert(vIn i) {
-        mat4 pv = camera.projection * camera.view;
+        mat4 pv = camera.projection * camera.inverse_view;
         mat4 mvp = pv * modelMatrix;
 
         gl_Position = mvp * vec4(i.pos, 1.0);
@@ -313,4 +292,13 @@ crate::program!(camera_gizmo, {
     vec4 frag(v2f i) {
         return i.color;
     }
+}, true);
+
+crate::snippet!(camera_matrices, {
+    #bind 0
+    uniform CameraMatrices {
+        mat4 projection;
+        mat4 view;
+        mat4 inverse_view;
+    } camera;
 }, true);

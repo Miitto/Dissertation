@@ -47,7 +47,7 @@ impl Camera for PerspectiveCamera {
     }
 
     fn get_view(&self) -> Mat4 {
-        Into::<Mat4>::into(self.transform).inverse()
+        self.transform.into()
     }
 
     fn transform(&self) -> &Transform {

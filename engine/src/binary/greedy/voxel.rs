@@ -28,7 +28,7 @@ shaders::program!(greedy_voxel, {
     v2f vert(vIn v, iIn i) {
         v2f o;
 
-        mat4 vp = camera.projection * camera.viewMatrix;
+        mat4 vp = camera.projection * camera.view;
 
         int v_x = v.v_pos.x;
         int v_y = v.v_pos.y;

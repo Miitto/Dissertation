@@ -14,6 +14,7 @@ pub(crate) struct ShaderInfo {
     pub frag_fn: Option<ShaderFunction>,
     pub geometry_fn: Option<ShaderFunction>,
     pub includes: Vec<String>,
+    pub uses: Vec<Vec<Ident>>,
 }
 
 impl ShaderInfo {

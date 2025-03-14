@@ -1,12 +1,8 @@
 use glam::Vec3;
-use shaders::Program as _;
 
 pub use line::{Program, Uniforms, Vertex, uniforms};
 
-use crate::{
-    Renderable,
-    bounds::{AABB, BoundingHeirarchy, BoundingSphere},
-};
+use crate::bounds::{AABB, BoundingHeirarchy, BoundingSphere};
 
 pub struct Line {
     start: Vec3,
@@ -67,8 +63,10 @@ crate::program!(line, {
         vec3 color;
     }
 
+    #snippet crate::camera_matrices;
+
     v2f vert(vIn i) {
-        mat4 pv = camera.projection * camera.view;
+        mat4 pv = camera.projection * camera.inverse_view;
 
         gl_Position = pv * vec4(i.pos, 1.0);
 

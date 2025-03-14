@@ -65,7 +65,7 @@ impl Buffer for FencedRawBuffer {
     }
 
     fn empty(size: usize, mode: super::BufferMode) -> Result<Self, BufferError> {
-        println!("Creating empty FencedRawBuffer");
+        // println!("Creating empty FencedRawBuffer");
         let buffer = GpuBuffer::empty(size, mode)?;
 
         Ok(Self {
@@ -75,7 +75,7 @@ impl Buffer for FencedRawBuffer {
     }
 
     fn with_data<T: Sized>(data: &[T], mode: super::BufferMode) -> Result<Self, BufferError> {
-        println!("Creating FencedRawBuffer with data");
+        // println!("Creating FencedRawBuffer with data");
         let buffer = GpuBuffer::with_data(data, mode)?;
 
         Ok(Self {

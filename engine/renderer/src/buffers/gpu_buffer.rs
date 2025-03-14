@@ -27,10 +27,10 @@ impl GpuBuffer {
         &mut self,
         data: *const std::os::raw::c_void,
     ) -> std::result::Result<&mut Self, BufferError> {
-        println!(
-            "Creating Buffer with size {} and length: {}",
-            self.size, self.count
-        );
+        // println!(
+        //     "Creating Buffer with size {} and length: {}",
+        //     self.size, self.count
+        // );
         unsafe {
             gl::CreateBuffers(1, &mut self.id);
             gl::NamedBufferStorage(
@@ -78,7 +78,7 @@ impl Buffer for GpuBuffer {
     }
 
     fn empty(size: usize, mode: BufferMode) -> Result<Self, BufferError> {
-        println!("Creating empty GpuBuffer");
+        // println!("Creating empty GpuBuffer");
         let mut buf = Self {
             id: 0,
             size,
@@ -96,7 +96,7 @@ impl Buffer for GpuBuffer {
     where
         T: Sized,
     {
-        println!("Creating GpuBuffer with data");
+        // println!("Creating GpuBuffer with data");
         let size = std::mem::size_of_val(data);
 
         let mut buf = Self {
@@ -184,7 +184,7 @@ impl RawBuffer for GpuBuffer {
                 );
             }
         } else {
-            println!("Creating Copy Buffer");
+            // println!("Creating Copy Buffer");
             let mut copy_buf = GpuBuffer::with_data(data, BufferMode::Immutable)?;
             copy_buf.copy_to(self, 0, offset, size)?;
         }

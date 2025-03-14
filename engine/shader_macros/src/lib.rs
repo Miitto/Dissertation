@@ -20,7 +20,7 @@ type Result<I, C, E = ()> = core::result::Result<(I, C), E>;
 
 fn abandon(name: proc_macro2::Ident) -> TokenStream {
     quote! {
-    pub mod #name { pub struct Instance; pub struct Vertex; pub struct Program; compile_error!("Abandoned building {}", #name);}}
+    pub mod #name { pub struct Instance; pub struct Vertex; pub struct Program;}}
     .into()
 }
 
@@ -33,7 +33,7 @@ pub fn program(input: TokenStream) -> TokenStream {
         Err(e) => {
             e.emit();
 
-            return quote! {}.into();
+            panic!("Failed to parse program metadata");
         }
     };
 
@@ -51,7 +51,6 @@ pub fn program(input: TokenStream) -> TokenStream {
         Ok(parsed) => parsed,
         Err(e) => {
             e.emit();
-
             return abandon(name);
         }
     };
@@ -71,23 +70,87 @@ pub fn program(input: TokenStream) -> TokenStream {
     let vertex_struct = build_rust::vertex_struct(&input, use_crate);
     let uniform_struct = build_rust::uniform_struct(&input, use_crate);
 
-    let program_impl = build_rust::program(&vertex_shader, &fragment_shader, None, use_crate);
+    let program_impl = build_rust::program(
+        &vertex_shader,
+        &fragment_shader,
+        None,
+        &input.content.uses,
+        input.meta.version,
+        use_crate,
+    );
+
+    let uses = build_rust::uses(&input.content);
 
     let name = format_ident!("{}", input.meta.name.to_string());
 
     let includes = input.content.includes;
 
-    let expanded = quote! {
+    quote! {
         pub mod #name {
-        #(const _: &str = include_str!(#includes);)*
+            #(const _: &str = include_str!(#includes);)*
 
-        #vertex_struct
+            #vertex_struct
 
-        #uniform_struct
+            #uniform_struct
 
-        #program_impl
+            #program_impl
+
+            #uses
+        }
+    }
+    .into()
+}
+
+#[proc_macro]
+pub fn snippet(input: TokenStream) -> TokenStream {
+    let collected: Vec<proc_macro::TokenTree> = input.into_iter().collect();
+
+    let (content, meta) = match parse::meta::parse_meta(&collected) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            e.emit();
+
+            panic!("Failed to parse program metadata");
         }
     };
 
-    expanded.into()
+    let name = format_ident!("{}", meta.name.to_string());
+
+    let (rest, Delimited { content, .. }) =
+        if let Ok(content) = delimited(Delimiter::Brace)(content) {
+            content
+        } else {
+            Diagnostic::spanned(content[0].span(), Level::Error, "Expected block").emit();
+            return abandon(name);
+        };
+
+    let (_, info) = match parse::glsl::parse_glsl(&content) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            e.emit();
+            return abandon(name);
+        }
+    };
+
+    let use_crate = punct(',')(rest)
+        .and_then(|(rest, _)| ident("true")(rest))
+        .is_ok();
+
+    let input = ProgramInput {
+        meta,
+        content: info,
+    };
+
+    let uniform_struct = build_rust::uniform_struct(&input, use_crate);
+
+    let source = build_glsl::no_main(&input);
+
+    quote! {
+        pub mod #name {
+            #uniform_struct
+
+            pub const SOURCE: &'static str = #source;
+        }
+    }
+    .into()
 }

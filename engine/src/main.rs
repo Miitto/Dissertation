@@ -12,6 +12,7 @@ mod basic;
 mod binary;
 mod chunks;
 mod common;
+mod raymarching;
 mod tests;
 mod tri;
 
@@ -167,6 +168,7 @@ impl ApplicationHandler for App {
                         Test::Basic => {
                             Box::new(basic::setup(&self.args, false)) as Box<dyn Renderable>
                         }
+                        Test::Raymarch => raymarching::setup(self.state.as_ref().unwrap()),
                     })
                 }
 

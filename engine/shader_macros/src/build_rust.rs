@@ -1,5 +1,5 @@
 use crate::{
-    ProgramInput,
+    ProgramInput, ShaderInfo,
     shader_var::{ShaderType, ShaderVar},
     uniform::Uniform,
 };
@@ -207,6 +207,12 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
                 format_ident!("{}", f.name.to_string())
             });
 
+            let size: usize = u.fields.iter().map(|f| match &f.t {
+                ShaderType::Primative(a) => a.std140_align(),
+                ShaderType::Struct(s) => todo!("Get size for std140 struct"),
+                ShaderType::Void => 0
+            }).sum();
+
             quote! {
                 #[derive(Debug)]
                 pub struct #name {
@@ -215,10 +221,10 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
 
                 impl #name {
                     const BIND: u32 = #bind;
-                    const SIZE: usize = std::mem::size_of::<[[f32; 4]; 4]>();
+                    const SIZE: usize = #size;
                 }
 
-                impl ::#crate_path::UniformBlock for #name {
+                impl #crate_path::UniformBlock for #name {
                     fn bind_point() -> u32 {
                         Self::BIND
                     }
@@ -227,15 +233,15 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
                         Self::SIZE
                     }
 
-                    fn set_buffer_data<B: ::#crate_path::buffers::RawBuffer>(&self, buffer: &mut B) -> Result<(), ::#crate_path::buffers::BufferError> {
+                    fn set_buffer_data<B: #crate_path::buffers::RawBuffer>(&self, buffer: &mut B) -> Result<(), #crate_path::buffers::BufferError> {
                         let fields = [#(self.#field_names),*];
 
                         let mut offset = 0;
 
                         const fn attr_type_of_val<T: #crate_path::vertex::Attribute>(_: &T)
-                                -> ::#crate_path::vertex::format::AttributeType
+                                -> #crate_path::vertex::format::AttributeType
                             {
-                                <T as ::#crate_path::vertex::Attribute>::TYPE
+                                <T as #crate_path::vertex::Attribute>::TYPE
                             }
 
 
@@ -261,6 +267,8 @@ pub fn program(
     vertex_source: &str,
     fragment_source: &str,
     geom_source: Option<&String>,
+    uses: &[Vec<proc_macro::Ident>],
+    version: u32,
     use_crate: bool,
 ) -> proc_macro2::TokenStream {
     let geom_source = match geom_source {
@@ -274,16 +282,98 @@ pub fn program(
         quote! {renderer}
     };
 
+    let uses = uses
+        .iter()
+        .map(|s| {
+            let idents = s.iter().map(|i| format_ident!("{}", i.to_string()));
+            quote! {#(#idents)::*::SOURCE}
+        })
+        .reduce(|acc, el| quote! {combine!(#acc, #el)})
+        .unwrap_or(quote! {"\n"});
+
+    let version = format!("#version {}\n", version);
+
     quote! {
         pub struct Program;
 
         impl #crate_path::ProgramInternal for Program {
             fn vertex() -> &'static str {
-                #vertex_source
+                macro_rules! combine {
+                    ($A:expr, $B:expr) => {{
+                        const A: &str = $A;
+                        const B: &str = $B;
+                        const LEN: usize = A.len() + B.len();
+                        const fn combined() -> [u8; LEN] {
+                            let mut out = [0u8; LEN];
+                            out = copy_slice(A.as_bytes(), out, 0);
+                            out = copy_slice(B.as_bytes(), out, A.len());
+                            out
+                        }
+                        const fn copy_slice(input: &[u8], mut output: [u8; LEN], offset: usize) -> [u8; LEN] {
+                            let mut index = 0;
+                            loop {
+                                output[offset + index] = input[index];
+                                index += 1;
+                                if index == input.len() {
+                                    break;
+                                }
+                            }
+                            output
+                        }
+                        const RESULT: &[u8] = &combined();
+                        // how bad is the assumption that `&str` and `&[u8]` have the same layout?
+                        const RESULT_STR: &str = unsafe { std::str::from_utf8_unchecked(RESULT) };
+                        RESULT_STR
+                    }};
+                }
+
+                const USES_SOURCE: &'static str = #uses;
+
+                const VERSIONED: &'static str = combine!(#version, USES_SOURCE);
+
+                const NEW_LINED: &'static str = combine!(VERSIONED, "\n");
+
+                const VERTEX: &'static str = combine!(NEW_LINED, #vertex_source);
+                VERTEX
             }
 
             fn fragment() -> &'static str {
-                #fragment_source
+                macro_rules! combine {
+                    ($A:expr, $B:expr) => {{
+                        const A: &str = $A;
+                        const B: &str = $B;
+                        const LEN: usize = A.len() + B.len();
+                        const fn combined() -> [u8; LEN] {
+                            let mut out = [0u8; LEN];
+                            out = copy_slice(A.as_bytes(), out, 0);
+                            out = copy_slice(B.as_bytes(), out, A.len());
+                            out
+                        }
+                        const fn copy_slice(input: &[u8], mut output: [u8; LEN], offset: usize) -> [u8; LEN] {
+                            let mut index = 0;
+                            loop {
+                                output[offset + index] = input[index];
+                                index += 1;
+                                if index == input.len() {
+                                    break;
+                                }
+                            }
+                            output
+                        }
+                        const RESULT: &[u8] = &combined();
+                        // how bad is the assumption that `&str` and `&[u8]` have the same layout?
+                        const RESULT_STR: &str = unsafe { std::str::from_utf8_unchecked(RESULT) };
+                        RESULT_STR
+                    }};
+                }
+
+                const USES_SOURCE: &'static str = #uses;
+                const VERSIONED: &'static str = combine!(#version, USES_SOURCE);
+                const NEW_LINED: &'static str = combine!(VERSIONED, "\n");
+
+                const FRAG: &'static str = combine!(NEW_LINED, #fragment_source);
+                FRAG
+
             }
 
             fn geometry() -> Option<&'static str> {
@@ -363,4 +453,22 @@ fn vertex_binds(
             }
         },
     )
+}
+
+pub fn uses(info: &ShaderInfo) -> proc_macro2::TokenStream {
+    let uses = info
+        .uses
+        .iter()
+        .map(|s| {
+            let idents = s.iter().map(|i| format_ident!("{}", i.to_string()));
+
+            quote! { pub use #(#idents)::*;}
+        })
+        .collect::<Vec<_>>();
+
+    quote! {
+        pub mod uses {
+            #(#uses)*
+        }
+    }
 }

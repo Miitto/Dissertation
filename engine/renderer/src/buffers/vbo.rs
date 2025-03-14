@@ -73,7 +73,7 @@ where
     }
 
     fn with_data<D: Sized>(data: &[D], mode: BufferMode) -> Result<Self, BufferError> {
-        println!("Creating VBO with data");
+        // println!("Creating VBO with data");
         let buffer = FencedRawBuffer::with_data(data, mode)?;
 
         Ok(Self {
@@ -84,7 +84,7 @@ where
     }
 
     fn empty(size: usize, mode: BufferMode) -> Result<Self, BufferError> {
-        println!("Creating empty VBO");
+        // println!("Creating empty VBO");
         let buffer = FencedRawBuffer::empty(size, mode)?;
 
         Ok(Self {

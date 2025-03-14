@@ -34,10 +34,11 @@ pub use input::{Input, PositionDelta};
 pub use render_common::*;
 pub use state::State;
 pub mod draw;
-pub use ::shaders::{ProgramInternal, program};
+pub use ::shaders::{Program as ProgramSource, ProgramInternal, program, snippet};
 pub use memoffset::offset_of;
 pub use uniforms::*;
 mod transform;
+pub use camera::camera_matrices;
 pub use transform::Transform;
 
 pub fn make_event_loop() -> EventLoop<()> {

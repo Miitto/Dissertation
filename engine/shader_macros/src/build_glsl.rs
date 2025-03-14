@@ -32,7 +32,7 @@ fn get_uniforms(info: &ShaderInfo) -> String {
                         .unwrap_or_default()
                 )
             }
-        }).chain(["layout(std140, binding = 0) uniform CameraMatrices {\n\tmat4 projection;\n\tmat4 view;\n} camera;\n".to_string()])
+        })
         .collect::<Vec<String>>()
         .join("\n")
 }
@@ -183,7 +183,7 @@ pub fn vertex_shader(
     };
 
     let content = format!(
-        r#"#version {}
+        r#"
 // In
 {in_vars}
 
@@ -213,11 +213,7 @@ void main() {{
     {} {}(vertex_input{});
     {}
 }}"#,
-        meta.version,
-        vertex_out_decl,
-        vertex_fn.var.name,
-        main_instance_param,
-        struct_to_out_assign
+        vertex_out_decl, vertex_fn.var.name, main_instance_param, struct_to_out_assign
     );
 
     content
@@ -229,7 +225,7 @@ pub fn fragment_shader(
         meta,
     }: &ProgramInput,
 ) -> String {
-    let uniforms = String::default(); // get_uniforms(info);
+    let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
 
@@ -302,7 +298,7 @@ pub fn fragment_shader(
     };
 
     let content = format!(
-        r#"#version {}
+        r#"
 
 // In
 {in_vars}
@@ -329,8 +325,28 @@ void main() {{
     // Out
     frag_output = {}({});
 }}"#,
-        meta.version, frag_fn.var.name, fn_param
+        frag_fn.var.name, fn_param
     );
 
     content
+}
+
+pub fn no_main(ProgramInput { content, .. }: &ProgramInput) -> String {
+    let uniforms = get_uniforms(content);
+
+    let structs = get_structs(content);
+
+    let functions = get_functions(content);
+
+    format!(
+        r#"// Structs
+{structs}
+
+// Uniforms
+{uniforms}
+
+//Functions
+{functions}
+    "#
+    )
 }

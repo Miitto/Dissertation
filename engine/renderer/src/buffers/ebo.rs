@@ -67,7 +67,7 @@ impl Buffer for Ebo {
     where
         T: Sized,
     {
-        println!("Creating EBO with data");
+        // println!("Creating EBO with data");
         let buffer = GpuBuffer::with_data(data, mode)?;
 
         Ok(Self {
@@ -77,7 +77,7 @@ impl Buffer for Ebo {
     }
 
     fn empty(size: usize, mode: BufferMode) -> Result<Self, BufferError> {
-        println!("Creating empty EBO");
+        // println!("Creating empty EBO");
         let buffer = GpuBuffer::empty(size, mode)?;
 
         Ok(Self { buffer, len: 0 })

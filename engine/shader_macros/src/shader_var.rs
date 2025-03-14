@@ -41,6 +41,7 @@ impl ShaderType {
             Some(ShaderType::Struct(s.clone()))
         } else {
             Some(ShaderType::Primative(match val {
+                "byte" => AttributeType::I8,
                 "int" => AttributeType::I32,
                 "uint" => AttributeType::U32,
                 "float" => AttributeType::F32,
@@ -67,6 +68,7 @@ impl Display for ShaderType {
                     f,
                     "{}",
                     match t {
+                        I8 => "byte",
                         I32 => "int",
                         U32 => "uint",
                         F32 => "float",
@@ -93,6 +95,7 @@ impl ToTokens for ShaderType {
             Self::Primative(t) => {
                 use AttributeType::*;
                 match t {
+                    I8 => tokens.extend(quote! {i8}),
                     I32 => tokens.extend(quote! {i32}),
                     U32 => tokens.extend(quote! {u32}),
                     F32 => tokens.extend(quote! {f32}),
