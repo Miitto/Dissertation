@@ -2,7 +2,7 @@ use proc_macro::{Diagnostic, Ident, Level};
 
 use crate::{
     shader_var::{ShaderFunction, ShaderStruct, ShaderType},
-    uniform::Uniform,
+    uniform::{LayoutBlock, Uniform},
 };
 
 #[derive(Clone, Debug, Default)]
@@ -10,6 +10,7 @@ pub(crate) struct ShaderInfo {
     pub structs: Vec<ShaderStruct>,
     pub functions: Vec<ShaderFunction>,
     pub uniforms: Vec<Uniform>,
+    pub buffers: Vec<LayoutBlock>,
     pub vertex_fn: Option<ShaderFunction>,
     pub frag_fn: Option<ShaderFunction>,
     pub geometry_fn: Option<ShaderFunction>,

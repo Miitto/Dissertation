@@ -2,13 +2,13 @@ use std::marker::PhantomData;
 
 use render_common::Program;
 
-use crate::{UniformBlock, Uniforms};
+use crate::{LayoutBlock, Uniforms};
 
 use super::{Buffer, BufferError, BufferMode, FencedRawBuffer};
 
 pub struct UniformBuffer<U>
 where
-    U: UniformBlock,
+    U: LayoutBlock,
 {
     buffer: FencedRawBuffer,
     phantom: PhantomData<U>,
@@ -16,7 +16,7 @@ where
 
 impl<U> UniformBuffer<U>
 where
-    U: UniformBlock,
+    U: LayoutBlock,
 {
     pub fn new(uniforms: U) -> Result<Self, BufferError> {
         // println!("Creating Uniform buffer with size: {}", U::size());
@@ -41,7 +41,7 @@ where
 
 impl<U> Uniforms for UniformBuffer<U>
 where
-    U: UniformBlock,
+    U: LayoutBlock,
 {
     fn bind(&self, _program: &Program) {
         unsafe { gl::BindBufferBase(gl::UNIFORM_BUFFER, U::bind_point(), self.buffer.id()) }

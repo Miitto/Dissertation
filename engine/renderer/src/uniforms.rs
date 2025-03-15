@@ -13,7 +13,7 @@ pub fn get_uniform_location(program: &Program, name: &str) -> usize {
     unsafe { gl::GetUniformLocation(program.id() as gl::types::GLuint, c_str.as_ptr()) as usize }
 }
 
-pub trait UniformBlock: std::fmt::Debug {
+pub trait LayoutBlock: std::fmt::Debug {
     fn bind_point() -> u32;
     fn size() -> usize;
     fn set_buffer_data<B: RawBuffer>(&self, buffer: &mut B) -> Result<(), BufferError>;

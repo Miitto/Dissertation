@@ -89,24 +89,43 @@ renderer::program!(raymarching, {
         gl_Position = vec4(pos, 0.0, 1.0);
     }
 
+    struct Ray {
+        vec3 origin;
+        vec3 direction;
+    }
+
+    float sphere(vec3 sphere_pos, float radius, vec3 point_pos) {
+        return length(point_pos - sphere_pos) - radius;
+    }
+
     float map(vec3 position) {
-        return length(position) - 1.0;
+        return max(-sphere(vec3(0, 0, -3), 1, position), sphere(vec3(2, 0, -2), 2, position));
+    }
+
+    Ray getRay(vec2 coord) {
+        vec2 uv = (coord * 2 - iResolution.res.xy) / iResolution.res.y;
+
+        vec4 far = camera.inverse_projection * vec4(uv, 1, 1);
+        vec4 view = camera.view * far;
+
+        Ray ray;
+        ray.origin = camera.position;
+        ray.direction = normalize(view.xyz / view.w);
+        return ray;
     }
 
 
     vec4 frag() {
         const int MAX_STEPS = 80;
 
-        vec2 uv = (gl_FragCoord.xy * 2.0 - iResolution.res.xy) / iResolution.res.y;
+        Ray ray = getRay(gl_FragCoord.xy);
 
-        vec3 ray_origin = camera.view[3].xyz;
-        vec3 ray_direction = normalize(vec3(uv, 1));
         vec3 color = vec3(0);
 
         float distance = 0.0;
 
         for (int i = 0; i < MAX_STEPS; ++i) {
-            vec3 start_pos = ray_origin + ray_direction * distance;
+            vec3 start_pos = ray.origin + ray.direction * distance;
 
             float d = map(start_pos);
 
@@ -116,7 +135,7 @@ renderer::program!(raymarching, {
             if (d < 0.001 || distance > 1000.0) break;
         }
 
-        color = vec3(distance * 0.2);
+        color = vec3(distance * 0.1);
 
         return vec4(color, 1.0);
     }

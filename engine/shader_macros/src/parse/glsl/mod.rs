@@ -2,12 +2,14 @@ use proc_macro::{Diagnostic, Level, Span, TokenTree};
 
 use crate::{Result, shader_info::ShaderInfo};
 
+mod buffer;
 mod function;
 mod preprocessor;
 mod r#struct;
 mod uniform;
 mod variable;
 
+use buffer::parse_buffer;
 use function::parse_function;
 use preprocessor::parse_preprocessor;
 use r#struct::parse_struct;
@@ -68,6 +70,17 @@ fn parse_segments(
             Err(diag) => {
                 if let Some(diag) = diag {
                     return Err(diag);
+                }
+            }
+        }
+        match parse_buffer(input, info, state) {
+            Ok((rest, buf)) => {
+                input = rest;
+                info.buffers.push(buf);
+            }
+            Err(e) => {
+                if let Some(e) = e {
+                    return Err(e);
                 }
             }
         }

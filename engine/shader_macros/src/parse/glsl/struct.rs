@@ -14,6 +14,18 @@ pub fn parse_struct<'a>(
     info: &mut ShaderInfo,
 ) -> Result<&'a [TokenTree], (), Option<Diagnostic>> {
     let (input, _) = ident("struct")(input).map_err(|_| None)?;
+
+    let (input, st) = parse_layout_block(input, info)?;
+
+    info.structs.push(st);
+
+    Ok((input, ()))
+}
+
+pub fn parse_layout_block<'a>(
+    input: &'a [TokenTree],
+    info: &ShaderInfo,
+) -> Result<&'a [TokenTree], ShaderStruct, Diagnostic> {
     let (input, name) = ident_any(input)
         .map_err(|_| Diagnostic::spanned(input[0].span(), Level::Error, "Expected struct name"))?;
 
@@ -22,9 +34,12 @@ pub fn parse_struct<'a>(
 
     fn struct_field<'a>(
         input: &'a [TokenTree],
-        info: &mut ShaderInfo,
-    ) -> Result<&'a [TokenTree], ShaderVar, Option<Diagnostic>> {
-        let (input, var) = parse_var(input, info)?;
+        info: &ShaderInfo,
+    ) -> Result<&'a [TokenTree], ShaderVar, Diagnostic> {
+        let (input, var) = parse_var(input, info).map_err(|e| match e {
+            Some(e) => e,
+            None => Diagnostic::spanned(input[0].span(), Level::Error, "Expected Struct Field"),
+        })?;
 
         let (input, _) = punct(';')(input)
             .map_err(|_| Diagnostic::spanned(input[0].span(), Level::Error, "Expected ;"))?;
@@ -36,26 +51,17 @@ pub fn parse_struct<'a>(
 
     let mut fields = vec![];
 
-    while !content.is_empty() {
-        match struct_field(rest, info) {
-            Ok((r, f)) => {
-                fields.push(f);
-                rest = r;
-            }
-            Err(diag) => {
-                if let Some(diag) = diag {
-                    return Err(Some(diag));
-                } else {
-                    break;
-                }
-            }
-        }
+    while !rest.is_empty() {
+        let (r, f) = struct_field(rest, info)?;
+        rest = r;
+        fields.push(f);
     }
 
-    info.structs.push(ShaderStruct {
-        name: name.clone(),
-        fields,
-    });
-
-    Ok((input, ()))
+    Ok((
+        input,
+        ShaderStruct {
+            name: name.clone(),
+            fields,
+        },
+    ))
 }

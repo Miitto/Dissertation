@@ -5,7 +5,7 @@ use crate::shader_var::ShaderVar;
 #[derive(Clone, Debug)]
 pub enum Uniform {
     Single(SingleUniform),
-    Block(UniformBlock),
+    Block(LayoutBlock),
 }
 
 #[derive(Clone, Debug)]
@@ -15,7 +15,7 @@ pub struct SingleUniform {
 }
 
 #[derive(Clone, Debug)]
-pub struct UniformBlock {
+pub struct LayoutBlock {
     pub bind: u32,
     pub name: Ident,
     pub fields: Vec<ShaderVar>,

@@ -37,6 +37,29 @@ fn get_uniforms(info: &ShaderInfo) -> String {
         .join("\n")
 }
 
+fn get_buffers(info: &ShaderInfo) -> String {
+    info.buffers
+        .iter()
+        .map(|b| {
+            let fields = b.fields.iter().fold(String::default(), |mut s, f| {
+                _ = writeln!(s, "\t{};", f);
+                s
+            });
+
+            format!(
+                "layout(std430, binding = {}) uniform {} {{\n{}}} {};",
+                b.bind,
+                b.name,
+                fields,
+                b.var_name
+                    .as_ref()
+                    .map(|i| i.to_string())
+                    .unwrap_or_default()
+            )
+        })
+        .collect()
+}
+
 fn get_structs(info: &ShaderInfo) -> String {
     info.structs
         .iter()
@@ -53,17 +76,14 @@ fn get_functions(info: &ShaderInfo) -> String {
         .join("\n")
 }
 
-pub fn vertex_shader(
-    ProgramInput {
-        content: info,
-        meta,
-    }: &ProgramInput,
-) -> String {
+pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> String {
     let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
 
     let functions = get_functions(info);
+
+    let buffers = get_buffers(info);
 
     let vertex_fn = if let Some(vertex_fn) = info.vertex_fn.as_ref() {
         vertex_fn
@@ -184,17 +204,20 @@ pub fn vertex_shader(
 
     let content = format!(
         r#"
-// In
-{in_vars}
-
-// Out
-{out_vars}
-
 // Structs
 {structs}
 
 // Uniforms
 {uniforms}
+
+// Buffers
+{buffers}
+
+// In
+{in_vars}
+
+// Out
+{out_vars}
 
 // Functions
 {functions}
@@ -219,15 +242,12 @@ void main() {{
     content
 }
 
-pub fn fragment_shader(
-    ProgramInput {
-        content: info,
-        meta,
-    }: &ProgramInput,
-) -> String {
+pub fn fragment_shader(ProgramInput { content: info, .. }: &ProgramInput) -> String {
     let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
+
+    let buffers = get_buffers(info);
 
     let functions = get_functions(info);
 
@@ -299,18 +319,20 @@ pub fn fragment_shader(
 
     let content = format!(
         r#"
+// Structs
+{structs}
+
+// Uniforms
+{uniforms}
+
+// Buffers
+{buffers}
 
 // In
 {in_vars}
 
 // Out
 layout(location = 0) out {out_var_type} frag_output;
-
-// Structs
-{structs}
-
-// Uniforms
-{uniforms}
 
 // Functions
 {functions}

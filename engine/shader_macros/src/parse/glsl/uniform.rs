@@ -1,10 +1,10 @@
-use proc_macro::{Delimiter, Diagnostic, Level, Span, TokenTree};
+use proc_macro::{Diagnostic, Level, Span, TokenTree};
 
 use crate::Result;
-use crate::parse::{Delimited, delimited, ident, ident_any, punct};
-use crate::shader_var::ShaderVar;
-use crate::uniform::{SingleUniform, Uniform, UniformBlock};
+use crate::parse::{ident, ident_any, punct};
+use crate::uniform::{LayoutBlock, SingleUniform, Uniform};
 
+use super::r#struct::parse_layout_block;
 use super::{State, parse_var};
 use crate::shader_info::ShaderInfo;
 
@@ -88,53 +88,7 @@ fn check_block<'a>(
     info: &mut ShaderInfo,
     state: &mut State,
 ) -> Result<&'a [TokenTree], Uniform, Option<Diagnostic>> {
-    let (input, block_name) = ident_any(input).map_err(|_| {
-        Some(Diagnostic::spanned(
-            input[0].span(),
-            Level::Error,
-            "Expected name for uniform block",
-        ))
-    })?;
-
-    let (input, Delimited { content, .. }) = delimited(Delimiter::Brace)(input).map_err(|_| {
-        Some(Diagnostic::spanned(
-            input.first().map(|i| i.span()).unwrap_or(Span::call_site()),
-            Level::Error,
-            "Expected uniform block content",
-        ))
-    })?;
-
-    fn struct_field<'a>(
-        input: &'a [TokenTree],
-        info: &mut ShaderInfo,
-    ) -> Result<&'a [TokenTree], ShaderVar, Option<Diagnostic>> {
-        let (input, var) = parse_var(input, info)?;
-
-        let (input, _) = punct(';')(input)
-            .map_err(|_| Diagnostic::spanned(input[0].span(), Level::Error, "Expected ;"))?;
-
-        Ok((input, var))
-    }
-
-    let mut rest: &[TokenTree] = &content;
-
-    let mut fields = vec![];
-
-    while !content.is_empty() {
-        match struct_field(rest, info) {
-            Ok((r, f)) => {
-                fields.push(f);
-                rest = r;
-            }
-            Err(diag) => {
-                if let Some(diag) = diag {
-                    return Err(Some(diag));
-                } else {
-                    break;
-                }
-            }
-        }
-    }
+    let (input, st) = parse_layout_block(input, info)?;
 
     let (input, var_name) = ident_any(input)
         .map(|(i, v)| (i, Some(v.clone())))
@@ -152,16 +106,16 @@ fn check_block<'a>(
         bind
     } else {
         return Err(Some(Diagnostic::spanned(
-            block_name.span(),
+            st.name.span(),
             Level::Error,
             "Expected #bind directive before this line",
         )));
     };
 
-    let uniform = Uniform::Block(UniformBlock {
+    let uniform = Uniform::Block(LayoutBlock {
         bind,
-        name: block_name.clone(),
-        fields,
+        name: st.name,
+        fields: st.fields,
         var_name,
     });
 

@@ -1,5 +1,5 @@
 use crate::{
-    Dir, DrawMode, Input, State, Transform, UniformBlock, Uniforms,
+    Dir, DrawMode, Input, LayoutBlock, State, Transform, Uniforms,
     buffers::UniformBuffer,
     draw::line::{self, Line},
     mesh::{Mesh, basic::BasicMesh},
@@ -82,12 +82,15 @@ impl CameraManager {
         self.active_mut().handle_input(keys, delta);
 
         let active = self.active();
+        let projection = active.get_projection();
         let view = active.get_view();
 
         let matrices = camera_matrices::uniforms::CameraMatrices {
-            projection: active.get_projection().to_cols_array_2d(),
+            projection: projection.to_cols_array_2d(),
+            inverse_projection: projection.inverse().to_cols_array_2d(),
             view: view.to_cols_array_2d(),
             inverse_view: view.inverse().to_cols_array_2d(),
+            position: active.transform().position.to_array(),
         };
 
         if let Err(e) = self.camera_matrices_buffer.set_data(&matrices) {
@@ -230,12 +233,15 @@ impl Default for CameraManager {
 
         let default_camera = Box::new(PerspectiveCamera::default());
 
+        let projection = default_camera.get_projection();
         let view = default_camera.get_view();
 
         let matrices = camera_matrices::uniforms::CameraMatrices {
-            projection: default_camera.get_projection().to_cols_array_2d(),
+            projection: projection.to_cols_array_2d(),
+            inverse_projection: projection.inverse().to_cols_array_2d(),
             view: view.to_cols_array_2d(),
             inverse_view: view.inverse().to_cols_array_2d(),
+            position: default_camera.transform().position.to_array(),
         };
 
         let cam_buf =
@@ -298,7 +304,9 @@ crate::snippet!(camera_matrices, {
     #bind 0
     uniform CameraMatrices {
         mat4 projection;
+        mat4 inverse_projection;
         mat4 view;
         mat4 inverse_view;
+        vec3 position;
     } camera;
 }, true);
