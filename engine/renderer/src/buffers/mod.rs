@@ -1,14 +1,14 @@
 mod ebo;
 mod fenced_buffer;
 mod gpu_buffer;
-mod uniform_buffer;
+mod ssbo;
 mod vao;
 mod vbo;
 
 pub use ebo::*;
 pub use fenced_buffer::*;
 pub use gpu_buffer::*;
-pub use uniform_buffer::*;
+pub use ssbo::*;
 pub use vao::*;
 pub use vbo::*;
 

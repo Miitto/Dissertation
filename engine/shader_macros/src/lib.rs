@@ -154,3 +154,78 @@ pub fn snippet(input: TokenStream) -> TokenStream {
     }
     .into()
 }
+
+#[proc_macro]
+pub fn compute(input: TokenStream) -> TokenStream {
+    let collected: Vec<proc_macro::TokenTree> = input.into_iter().collect();
+
+    let (content, meta) = match parse::meta::parse_meta(&collected) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            e.emit();
+
+            panic!("Failed to parse program metadata");
+        }
+    };
+
+    let name = format_ident!("{}", meta.name.to_string());
+
+    let (rest, Delimited { content, .. }) =
+        if let Ok(content) = delimited(Delimiter::Brace)(content) {
+            content
+        } else {
+            Diagnostic::spanned(content[0].span(), Level::Error, "Expected block").emit();
+            return abandon(name);
+        };
+
+    let (_, info) = match parse::glsl::parse_glsl(&content) {
+        Ok(parsed) => parsed,
+        Err(e) => {
+            e.emit();
+            return abandon(name);
+        }
+    };
+
+    let use_crate = punct(',')(rest)
+        .and_then(|(rest, _)| ident("true")(rest))
+        .is_ok();
+
+    let input = ProgramInput {
+        meta,
+        content: info,
+    };
+
+    let programs = input
+        .content
+        .compute
+        .iter()
+        .map(|c| {
+            let source = build_glsl::compute(c, &input);
+
+            build_rust::compute_program(
+                &source,
+                &c.name.to_string(),
+                &input.content.uses,
+                input.meta.version,
+                use_crate,
+            )
+        })
+        .collect::<Vec<_>>();
+
+    let uses = build_rust::uses(&input.content);
+    let includes = &input.content.includes;
+    let uniform_struct = build_rust::uniform_struct(&input, use_crate);
+
+    quote! {
+        pub mod #name {
+            #(const _: &str = include_str!(#includes);)*
+
+            #(#programs)*
+
+            #uniform_struct
+
+            #uses
+        }
+    }
+    .into()
+}

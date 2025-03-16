@@ -1,6 +1,6 @@
 use crate::{
     Dir, DrawMode, Input, LayoutBlock, State, Transform, Uniforms,
-    buffers::UniformBuffer,
+    buffers::ShaderBuffer,
     draw::line::{self, Line},
     mesh::{Mesh, basic::BasicMesh},
 };
@@ -36,12 +36,12 @@ pub struct CameraManager {
     base_camera_gizmo_mesh: BasicMesh<camera_gizmo::Vertex>,
     frustum_mesh: BasicMesh<line::Vertex>,
 
-    camera_matrices_buffer: UniformBuffer<camera_matrices::uniforms::CameraMatrices>,
+    camera_matrices_buffer: ShaderBuffer<camera_matrices::uniforms::CameraMatrices>,
 }
 
 impl CameraManager {
-    pub fn bind_camera_uniforms(&self, program: &Program) {
-        self.camera_matrices_buffer.bind(program);
+    pub fn bind_camera_uniforms(&self) {
+        self.camera_matrices_buffer.bind();
     }
 
     pub fn on_window_resize(&mut self, width: f32, height: f32) {
@@ -123,7 +123,7 @@ impl CameraManager {
 
         program.bind();
         uniforms.bind(&program);
-        state.cameras.bind_camera_uniforms(&program);
+        state.cameras.bind_camera_uniforms();
 
         state.cameras.base_camera_gizmo_mesh.render(&frustum);
     }
@@ -164,7 +164,7 @@ impl CameraManager {
 
         program.bind();
         uniforms.bind(&program);
-        state.cameras.bind_camera_uniforms(&program);
+        state.cameras.bind_camera_uniforms();
 
         state.cameras.frustum_mesh.render(&frustum);
     }
@@ -244,8 +244,7 @@ impl Default for CameraManager {
             position: default_camera.transform().position.to_array(),
         };
 
-        let cam_buf =
-            UniformBuffer::new(matrices).expect("Failed to create camera matrices buffer");
+        let cam_buf = ShaderBuffer::new(matrices).expect("Failed to create camera matrices buffer");
 
         unsafe {
             gl::BindBufferBase(

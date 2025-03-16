@@ -1,6 +1,9 @@
 use proc_macro::{Diagnostic, Level, Span, TokenTree};
 
-use crate::{Result, shader_info::ShaderInfo};
+use crate::{
+    Result,
+    shader_info::{ComputeInfo, ShaderInfo},
+};
 
 mod buffer;
 mod function;
@@ -22,6 +25,8 @@ struct State {
     pub frag_fn_name: Option<String>,
     pub geometry_fn_name: Option<String>,
     pub next_bind: Option<u32>,
+    pub next_size: Option<(u32, u32, u32)>,
+    pub kernel_names: Vec<String>,
 }
 
 pub fn parse_glsl(input: &[TokenTree]) -> Result<(), ShaderInfo, Diagnostic> {
@@ -108,6 +113,14 @@ fn parse_segments(
                     .is_some_and(|name| *name == fn_name)
                 {
                     info.geometry_fn = Some(function);
+                } else if state.kernel_names.contains(&fn_name) {
+                    let size = state.next_size.take().unwrap_or((1, 1, 1));
+
+                    info.compute.push(ComputeInfo {
+                        name: function.var.name.clone(),
+                        size,
+                        function,
+                    });
                 } else {
                     info.functions.push(function);
                 }

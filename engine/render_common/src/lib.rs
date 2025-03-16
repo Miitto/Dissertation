@@ -89,12 +89,13 @@ fn compile_shader(source: &str, ty: ShaderType) -> Shader {
     Shader { id: shader }
 }
 
-fn link_program(vertex: Shader, frag: Shader) -> Program {
+fn link_program(shaders: &[Shader]) -> Program {
     let program = unsafe {
         let program = gl::CreateProgram();
 
-        gl::AttachShader(program, frag.id);
-        gl::AttachShader(program, vertex.id);
+        for shader in shaders {
+            gl::AttachShader(program, shader.id);
+        }
         gl::LinkProgram(program);
 
         let mut status = gl::FALSE as gl::types::GLint;
@@ -121,10 +122,43 @@ pub fn make_program(vertex: &str, fragment: &str) -> Program {
     let v = compile_shader(vertex, ShaderType::Vertex);
     let f = compile_shader(fragment, ShaderType::Fragment);
 
-    link_program(v, f)
+    link_program(&[v, f])
 }
 
-#[allow(dead_code)]
+fn link_compute_program(compute: Shader) -> ComputeProgram {
+    let program = unsafe {
+        let program = gl::CreateProgram();
+
+        gl::AttachShader(program, compute.id);
+        gl::LinkProgram(program);
+
+        let mut status = gl::FALSE as gl::types::GLint;
+        gl::GetProgramiv(program, gl::LINK_STATUS, &mut status);
+
+        if status == 0 {
+            let mut v: Vec<u8> = Vec::with_capacity(1024);
+            let mut log_len = 0_i32;
+            gl::GetProgramInfoLog(
+                program,
+                1024,
+                &mut log_len,
+                v.as_mut_ptr() as *mut gl::types::GLchar,
+            );
+            v.set_len(log_len.try_into().unwrap());
+            panic!("Program Compile Error: {}", String::from_utf8_lossy(&v));
+        }
+        program
+    };
+
+    ComputeProgram { id: program }
+}
+
+pub fn make_compute_program(source: &str) -> ComputeProgram {
+    let c = compile_shader(source, ShaderType::Compute);
+
+    link_compute_program(c)
+}
+
 #[derive(Debug)]
 pub struct Program {
     id: gl::types::GLuint,
@@ -164,5 +198,36 @@ impl From<Program> for gl::types::GLuint {
 impl From<&Program> for gl::types::GLuint {
     fn from(program: &Program) -> gl::types::GLuint {
         program.id
+    }
+}
+
+#[derive(Debug)]
+pub struct ComputeProgram {
+    id: gl::types::GLuint,
+}
+
+impl ComputeProgram {
+    /// Bind the program. Will not rebind if already bound.
+    pub fn bind(&self) {
+        if ACTIVE_PROGRAM.with(|active| active.borrow().is_some_and(|a| a == self.id)) {
+            return;
+        }
+        unsafe {
+            gl::UseProgram(self.id);
+            ACTIVE_PROGRAM.with(|active| *active.borrow_mut() = Some(self.id));
+        }
+    }
+
+    pub fn dispatch(&self, x: u32, y: u32, z: u32) {
+        self.bind();
+
+        unsafe {
+            gl::DispatchCompute(x, y, z);
+            gl::MemoryBarrier(gl::SHADER_IMAGE_ACCESS_BARRIER_BIT);
+        }
+    }
+
+    pub fn id(&self) -> usize {
+        self.id as usize
     }
 }

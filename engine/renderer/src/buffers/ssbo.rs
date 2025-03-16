@@ -2,11 +2,11 @@ use std::marker::PhantomData;
 
 use render_common::Program;
 
-use crate::{LayoutBlock, Uniforms};
+use crate::{LayoutBlock, SSBO, SSBOBlock, UniformBlock, Uniforms};
 
 use super::{Buffer, BufferError, BufferMode, FencedRawBuffer};
 
-pub struct UniformBuffer<U>
+pub struct ShaderBuffer<U>
 where
     U: LayoutBlock,
 {
@@ -14,7 +14,7 @@ where
     phantom: PhantomData<U>,
 }
 
-impl<U> UniformBuffer<U>
+impl<U> ShaderBuffer<U>
 where
     U: LayoutBlock,
 {
@@ -39,11 +39,31 @@ where
     }
 }
 
-impl<U> Uniforms for UniformBuffer<U>
+impl<T> ShaderBuffer<T>
 where
-    U: LayoutBlock,
+    T: LayoutBlock,
 {
-    fn bind(&self, _program: &Program) {
-        unsafe { gl::BindBufferBase(gl::UNIFORM_BUFFER, U::bind_point(), self.buffer.id()) }
+    pub fn bind_to(&self, location: gl::types::GLenum) {
+        unsafe {
+            gl::BindBufferBase(location, T::bind_point(), self.buffer.id());
+        }
+    }
+}
+
+impl<U> ShaderBuffer<U>
+where
+    U: LayoutBlock + UniformBlock,
+{
+    pub fn bind(&self) {
+        self.bind_to(gl::UNIFORM_BUFFER);
+    }
+}
+
+impl<B> SSBO for ShaderBuffer<B>
+where
+    B: LayoutBlock + SSBOBlock,
+{
+    fn bind(&self) {
+        self.bind_to(gl::SHADER_STORAGE_BUFFER);
     }
 }

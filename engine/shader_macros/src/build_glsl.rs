@@ -1,7 +1,9 @@
 use proc_macro::{Diagnostic, Level};
 use std::fmt::Write;
 
-use crate::{ProgramInput, ShaderInfo, shader_var::ShaderType, uniform::Uniform};
+use crate::{
+    ProgramInput, ShaderInfo, shader_info::ComputeInfo, shader_var::ShaderType, uniform::Uniform,
+};
 
 fn get_uniforms(info: &ShaderInfo) -> String {
     info.uniforms
@@ -14,6 +16,12 @@ fn get_uniforms(info: &ShaderInfo) -> String {
                     "".to_string()
                 };
                 format!("uniform {} {}{};", s.var.t, s.var.name, default_value)
+            }
+            Uniform::Texture(t) => {
+                format!(
+                    "layout(rgba32f, binding = {}) uniform {} {};",
+                    t.bind, t.var.t, t.var.name
+                )
             }
             Uniform::Block(b) => {
                 let fields = b.fields.iter().fold(String::default(), |mut s, f| {
@@ -370,5 +378,40 @@ pub fn no_main(ProgramInput { content, .. }: &ProgramInput) -> String {
 //Functions
 {functions}
     "#
+    )
+}
+
+pub fn compute(info: &ComputeInfo, ProgramInput { content, .. }: &ProgramInput) -> String {
+    let structs = get_structs(content);
+    let uniforms = get_uniforms(content);
+    let buffers = get_structs(content);
+    let functions = get_functions(content);
+
+    let main = info.function.to_string();
+    let fn_name = info.name.to_string();
+
+    format!(
+        r#"// Structs
+{structs}
+
+// Uniforms
+{uniforms}
+
+// Buffers
+{buffers}
+
+// Functions
+{functions}
+
+layout(local_size_x = {}, local_size_y = {}, local_size_z = {}) in;
+
+// Compute main
+{main}
+
+void main() {{
+    {fn_name}();
+}}
+"#,
+        info.size.0, info.size.1, info.size.2
     )
 }

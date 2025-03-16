@@ -27,7 +27,7 @@ impl State {
     {
         program.bind();
         uniforms.bind(program);
-        self.cameras.bind_camera_uniforms(program);
+        self.cameras.bind_camera_uniforms();
 
         mesh.render(&self.cameras.game_frustum());
     }

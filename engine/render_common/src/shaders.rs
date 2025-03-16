@@ -2,6 +2,7 @@ pub enum ShaderType {
     Vertex,
     Fragment,
     Geometry,
+    Compute,
 }
 
 impl TryFrom<&str> for ShaderType {
@@ -30,6 +31,7 @@ impl From<ShaderType> for gl::types::GLenum {
             ShaderType::Vertex => gl::VERTEX_SHADER,
             ShaderType::Fragment => gl::FRAGMENT_SHADER,
             ShaderType::Geometry => gl::GEOMETRY_SHADER,
+            ShaderType::Compute => gl::COMPUTE_SHADER,
         }
     }
 }
@@ -40,6 +42,7 @@ impl From<&ShaderType> for gl::types::GLenum {
             ShaderType::Vertex => gl::VERTEX_SHADER,
             ShaderType::Fragment => gl::FRAGMENT_SHADER,
             ShaderType::Geometry => gl::GEOMETRY_SHADER,
+            ShaderType::Compute => gl::COMPUTE_SHADER,
         }
     }
 }
@@ -53,6 +56,7 @@ impl std::fmt::Display for ShaderType {
                 Self::Vertex => "Vertex",
                 Self::Fragment => "Fragment",
                 Self::Geometry => "Geometry",
+                Self::Compute => "Compute",
             }
         )
     }
@@ -62,4 +66,8 @@ pub trait ProgramInternal {
     fn vertex() -> &'static str;
     fn fragment() -> &'static str;
     fn geometry() -> Option<&'static str>;
+}
+
+pub trait ComputeProgram {
+    fn compute() -> &'static str;
 }

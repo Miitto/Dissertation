@@ -16,6 +16,7 @@ pub(crate) struct ShaderInfo {
     pub geometry_fn: Option<ShaderFunction>,
     pub includes: Vec<String>,
     pub uses: Vec<Vec<Ident>>,
+    pub compute: Vec<ComputeInfo>,
 }
 
 impl ShaderInfo {
@@ -30,4 +31,11 @@ impl ShaderInfo {
             format!("Unknown type: {}", ident),
         ))
     }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ComputeInfo {
+    pub name: Ident,
+    pub size: (u32, u32, u32),
+    pub function: ShaderFunction,
 }

@@ -5,8 +5,8 @@ use renderer::{
 };
 
 use crate::{
-    binary::common::make_greedy_faces,
     common::{BasicVoxel, BlockType, InstanceData, Voxel},
+    meshing::binary::common::make_greedy_faces,
 };
 
 use super::voxel::greedy_voxel;

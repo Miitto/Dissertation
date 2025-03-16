@@ -1,6 +1,10 @@
 use glam::Mat4;
-use renderer::{Renderable, buffers::UniformBuffer, mesh::basic::BasicMesh};
+use renderer::{Renderable, buffers::ShaderBuffer, mesh::basic::BasicMesh};
 use shaders::Program;
+
+pub mod basic;
+pub mod binary;
+pub mod chunks;
 
 const VERTICES: [[f32; 2]; 3] = [[-0.5, -0.5], [0.0, 0.5], [0.5, -0.5]];
 
@@ -14,10 +18,14 @@ impl Renderable for Triangle {
             val: Mat4::IDENTITY.to_cols_array_2d(),
         };
 
-        let uniforms = UniformBuffer::new(uniforms).unwrap();
+        let uniforms = ShaderBuffer::new(uniforms).unwrap();
+        uniforms.bind();
+
         let program = triangle::Program::get();
 
-        state.draw(&mut self.mesh, &program, &uniforms);
+        let empty_uniforms = triangle::Uniforms {};
+
+        state.draw(&mut self.mesh, &program, &empty_uniforms);
     }
 }
 

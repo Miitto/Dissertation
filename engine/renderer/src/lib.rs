@@ -22,11 +22,13 @@ pub mod bounds;
 pub mod buffers;
 pub mod camera;
 pub mod fence;
+pub mod framebuffer;
 pub mod indices;
 pub mod material;
 pub mod math;
 pub mod mesh;
 pub mod object;
+pub mod texture;
 pub mod vertex;
 
 pub use enums::*;
@@ -34,7 +36,10 @@ pub use input::{Input, PositionDelta};
 pub use render_common::*;
 pub use state::State;
 pub mod draw;
-pub use ::shaders::{Program as ProgramSource, ProgramInternal, program, snippet};
+pub use ::shaders::{
+    ComputeProgram, ComputeProgramInternal, Program as ProgramSource, ProgramInternal, compute,
+    program, snippet,
+};
 pub use memoffset::offset_of;
 pub use uniforms::*;
 mod transform;

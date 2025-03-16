@@ -8,13 +8,10 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
-mod basic;
-mod binary;
-mod chunks;
 mod common;
-mod raymarching;
+mod meshing;
+mod raytracing;
 mod tests;
-mod tri;
 
 #[derive(clap::Parser, Debug)]
 #[command(version, about, long_about = None)]
@@ -149,26 +146,25 @@ impl ApplicationHandler for App {
 
                 if self.setup.is_none() {
                     self.setup = Some(match self.args.test {
-                        Test::Tri => tri::setup(),
-                        Test::Greedy => Box::new(binary::greedy::setup(
+                        Test::Tri => meshing::setup(),
+                        Test::Greedy => Box::new(meshing::binary::greedy::setup(
                             &self.args,
                             self.state.as_ref().unwrap(),
                         )) as Box<dyn Renderable>,
-                        Test::Culled => Box::new(binary::culled::setup(
+                        Test::Culled => Box::new(meshing::binary::culled::setup(
                             &self.args,
                             self.state.as_ref().unwrap(),
                         )) as Box<dyn Renderable>,
-                        Test::Chunk => {
-                            Box::new(chunks::setup(&self.args, self.state.as_ref().unwrap()))
-                                as Box<dyn Renderable>
-                        }
+                        Test::Chunk => Box::new(meshing::chunks::setup(
+                            &self.args,
+                            self.state.as_ref().unwrap(),
+                        )) as Box<dyn Renderable>,
                         Test::BasicInstanced => {
-                            Box::new(basic::setup(&self.args, true)) as Box<dyn Renderable>
+                            Box::new(meshing::basic::setup(&self.args, true)) as Box<dyn Renderable>
                         }
-                        Test::Basic => {
-                            Box::new(basic::setup(&self.args, false)) as Box<dyn Renderable>
-                        }
-                        Test::Raymarch => raymarching::setup(self.state.as_ref().unwrap()),
+                        Test::Basic => Box::new(meshing::basic::setup(&self.args, false))
+                            as Box<dyn Renderable>,
+                        Test::Raymarch => raytracing::setup(self.state.as_ref().unwrap()),
                     })
                 }
 

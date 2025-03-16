@@ -3,8 +3,8 @@ use std::cell::{Ref, RefCell};
 use renderer::Dir;
 
 use crate::{
-    binary::common::make_culled_faces,
     common::{BasicVoxel, BlockType, InstanceData, Voxel},
+    meshing::binary::common::make_culled_faces,
 };
 
 use super::voxel::culled_voxel;

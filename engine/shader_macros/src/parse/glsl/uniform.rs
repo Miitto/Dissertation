@@ -2,7 +2,8 @@ use proc_macro::{Diagnostic, Level, Span, TokenTree};
 
 use crate::Result;
 use crate::parse::{ident, ident_any, punct};
-use crate::uniform::{LayoutBlock, SingleUniform, Uniform};
+use crate::shader_var::ShaderType;
+use crate::uniform::{LayoutBlock, SingleUniform, TextureUniform, Uniform};
 
 use super::r#struct::parse_layout_block;
 use super::{State, parse_var};
@@ -34,7 +35,7 @@ pub fn parse_uniform<'a>(
     let (input, uniform) = if is_block(input) {
         check_block(input, info, state)
     } else {
-        check_non_block(input, info)
+        check_non_block(input, info, state)
     }?;
 
     info.uniforms.push(uniform);
@@ -52,8 +53,33 @@ fn is_block(input: &[TokenTree]) -> bool {
 fn check_non_block<'a>(
     input: &'a [TokenTree],
     info: &mut ShaderInfo,
+    state: &mut State,
 ) -> Result<&'a [TokenTree], Uniform, Option<Diagnostic>> {
     let (mut input, var) = parse_var(input, info)?;
+
+    if matches!(var.t, ShaderType::Texture(_)) {
+        let (input, _) = punct(';')(input).map_err(|_| {
+            Diagnostic::spanned(
+                input.get(0).map(|t| t.span()).unwrap_or(var.name.span()),
+                Level::Error,
+                "Expected ;",
+            )
+        })?;
+
+        let bind = if let Some(b) = state.next_bind.take() {
+            b
+        } else {
+            return Err(Some(Diagnostic::spanned(
+                var.name.span(),
+                Level::Error,
+                "Expected a bind point previously",
+            )));
+        };
+
+        let tex = TextureUniform { bind, var };
+
+        return Ok((input, Uniform::Texture(tex)));
+    }
 
     let mut value = None;
 

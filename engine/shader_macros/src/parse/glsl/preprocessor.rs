@@ -210,6 +210,41 @@ pub fn parse_preprocessor<'a>(
 
             info.uses.push(namespaces);
         }
+        "size" => {
+            let span = input[0].span();
+
+            let (rest, size_x) = uint(input)
+                .map_err(|_| Diagnostic::spanned(span, Level::Error, "Expected uint for x size"))?;
+
+            let (rest, size_y) = uint(rest)
+                .map_err(|_| Diagnostic::spanned(span, Level::Error, "Expected uint for y size"))?;
+
+            let (rest, size_z) = uint(rest)
+                .map_err(|_| Diagnostic::spanned(span, Level::Error, "Expected uint for z size"))?;
+
+            if let Some(size) = state.next_size {
+                Diagnostic::spanned(
+                    span,
+                    Level::Warning,
+                    format!("Already have a size for {:?}", size),
+                )
+                .emit();
+            }
+
+            state.next_size = Some((size_x, size_y, size_z));
+
+            input = rest;
+        }
+        "kernel" => {
+            let span = input[0].span();
+
+            let (rest, name) = ident_any(input)
+                .map_err(|_| Diagnostic::spanned(span, Level::Error, "Expected kernel name"))?;
+
+            state.kernel_names.push(name.to_string());
+
+            input = rest;
+        }
 
         _ => {}
     }

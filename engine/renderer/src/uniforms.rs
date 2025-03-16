@@ -18,3 +18,11 @@ pub trait LayoutBlock: std::fmt::Debug {
     fn size() -> usize;
     fn set_buffer_data<B: RawBuffer>(&self, buffer: &mut B) -> Result<(), BufferError>;
 }
+
+pub trait UniformBlock: LayoutBlock {}
+
+pub trait SSBO {
+    fn bind(&self);
+}
+
+pub trait SSBOBlock: LayoutBlock {}

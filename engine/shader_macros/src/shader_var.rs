@@ -30,7 +30,40 @@ impl ToTokens for ShaderVar {
 pub enum ShaderType {
     Void,
     Primative(AttributeType),
+    Texture(TextureType),
     Struct(ShaderStruct),
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum TextureType {
+    Image2D,
+}
+
+fn get_primative(val: &str) -> Option<AttributeType> {
+    Some(match val {
+        "byte" => AttributeType::I8,
+        "int" => AttributeType::I32,
+        "uint" => AttributeType::U32,
+        "float" => AttributeType::F32,
+        "vec2" => AttributeType::F32F32,
+        "vec3" => AttributeType::F32F32F32,
+        "vec4" => AttributeType::F32F32F32F32,
+        "mat4" => AttributeType::F32x4x4,
+        "ivec2" => AttributeType::I32I32,
+        "ivec3" => AttributeType::I32I32I32,
+        "ivec4" => AttributeType::I32I32I32I32,
+        "uvec2" => AttributeType::U32U32,
+        _ => return None,
+    })
+}
+
+fn get_texture(val: &str) -> Option<TextureType> {
+    Some(match val {
+        "image2D" => TextureType::Image2D,
+        _ => {
+            return None;
+        }
+    })
 }
 
 impl ShaderType {
@@ -39,21 +72,12 @@ impl ShaderType {
             Some(ShaderType::Void)
         } else if let Some(s) = structs.iter().find(|s| s.name.to_string() == val) {
             Some(ShaderType::Struct(s.clone()))
+        } else if let Some(t) = get_primative(val) {
+            Some(ShaderType::Primative(t))
+        } else if let Some(t) = get_texture(val) {
+            Some(ShaderType::Texture(t))
         } else {
-            Some(ShaderType::Primative(match val {
-                "byte" => AttributeType::I8,
-                "int" => AttributeType::I32,
-                "uint" => AttributeType::U32,
-                "float" => AttributeType::F32,
-                "vec2" => AttributeType::F32F32,
-                "vec3" => AttributeType::F32F32F32,
-                "vec4" => AttributeType::F32F32F32F32,
-                "mat4" => AttributeType::F32x4x4,
-                "ivec2" => AttributeType::I32I32,
-                "ivec3" => AttributeType::I32I32I32,
-                "ivec4" => AttributeType::I32I32I32I32,
-                _ => return None,
-            }))
+            None
         }
     }
 }
@@ -80,10 +104,14 @@ impl Display for ShaderType {
                         I32I32I32 => "ivec3",
                         I32I32I32I32 => "ivec4",
                         F32x4x4 => "mat4",
+                        U32U32 => "uvec2",
                         _ => todo!("Convert {:?} to GLSL", t),
                     }
                 )
             }
+            ShaderType::Texture(t) => match t {
+                TextureType::Image2D => write!(f, "image2D"),
+            },
             ShaderType::Struct(s) => write!(f, "{}", s.name),
         }
     }
@@ -106,10 +134,14 @@ impl ToTokens for ShaderType {
                     I32I32I32 => tokens.extend(quote! {[i32; 3]}),
                     I32I32I32I32 => tokens.extend(quote! {[i32; 4]}),
                     F32x4x4 => tokens.extend(quote! {[[f32; 4]; 4]}),
+                    U32U32 => tokens.extend(quote! {[u32; 2]}),
                     _ => todo!("Convert {:?} to rust type", t),
                 }
             }
             Self::Void => tokens.extend(quote! {()}),
+            Self::Texture(t) => match t {
+                TextureType::Image2D => tokens.extend(quote! {renderer::texture::Texture2D}),
+            },
             _ => panic!("Attempted to convert struct to rust type"),
         }
     }
