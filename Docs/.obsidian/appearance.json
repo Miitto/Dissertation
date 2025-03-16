@@ -4,7 +4,8 @@
   "textFontFamily": "Monaspace Neon",
   "monospaceFontFamily": "Monaspace Neon Var",
   "enabledCssSnippets": [
-    "export"
+    "export",
+    "8 + 8 highlight colors"
   ],
   "baseFontSize": 15,
   "theme": "system"
