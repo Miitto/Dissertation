@@ -13,6 +13,8 @@ shaders::program!(greedy_voxel, {
     #include "shaders/lighting.glsl"
     #include "shaders/block.glsl"
 
+    #snippet renderer::camera_matrices
+
     struct vIn {
         ivec3 v_pos;
     }
@@ -28,7 +30,7 @@ shaders::program!(greedy_voxel, {
     v2f vert(vIn v, iIn i) {
         v2f o;
 
-        mat4 vp = camera.projection * camera.view;
+        mat4 vp = camera.projection * camera.inverse_view;
 
         int v_x = v.v_pos.x;
         int v_y = v.v_pos.y;

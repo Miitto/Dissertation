@@ -91,8 +91,6 @@ impl Renderable for Voxel {
     fn render(&mut self, state: &mut State) {
         let uniforms = basic_voxel::Uniforms {
             modelMatrix: self.get_model_matrix().to_cols_array_2d(),
-            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
-            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
             block_type: self.block_type.into(),
         };
 
@@ -106,9 +104,9 @@ shaders::program!(basic_voxel, {
 #vertex vertex
 #fragment frag
 
+#snippet renderer::camera_matrices
+
 uniform mat4 modelMatrix;
-uniform mat4 viewMatrix;
-uniform mat4 projectionMatrix;
 uniform uint block_type;
 
 struct vIn {
@@ -123,7 +121,7 @@ struct v2f {
 
 v2f vertex(vIn i) {
     v2f o;
-    mat4 pv = projectionMatrix * viewMatrix;
+    mat4 pv = camera.projection * camera.inverse_view;
 
     mat4 mvp = pv * modelMatrix;
 
