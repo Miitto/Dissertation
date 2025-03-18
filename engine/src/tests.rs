@@ -22,6 +22,7 @@ pub enum Test {
     Culled,
     Greedy,
     Raymarch,
+    Svt64,
 }
 
 pub fn test_scene(args: &Args) -> HashMap<[i32; 3], BlockType> {

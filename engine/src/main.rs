@@ -165,6 +165,9 @@ impl ApplicationHandler for App {
                         Test::Basic => Box::new(meshing::basic::setup(&self.args, false))
                             as Box<dyn Renderable>,
                         Test::Raymarch => raytracing::setup(self.state.as_ref().unwrap()),
+                        Test::Svt64 => {
+                            raytracing::svt64::setup(&self.args, self.state.as_ref().unwrap())
+                        }
                     })
                 }
 

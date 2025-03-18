@@ -10,13 +10,13 @@ use shaders::ComputeProgram;
 pub mod esvo;
 pub mod svt64;
 
-pub fn setup(state: &State) -> Box<dyn Renderable> {
+pub fn setup_screen(state: &State) -> Screen {
     let resolution = state.display().window.inner_size();
 
     let resolution = uvec2(resolution.width, resolution.height);
 
-    let res_uniform = raymarching::uniforms::Resolution {
-        res: resolution.to_array(),
+    let res_uniform = raymarching::uses::ray::uniforms::iResolution {
+        resolution: resolution.to_array(),
     };
 
     let buffer = ShaderBuffer::new(res_uniform).expect("Failed to make resolution buffer");
@@ -36,43 +36,67 @@ pub fn setup(state: &State) -> Box<dyn Renderable> {
     framebuffer.set_tex_2d(TextureAttachPoint::Color0, &texture);
 
     framebuffer.bind();
-    framebuffer.bind_read();
-    Framebuffer::unbind_draw();
 
-    Box::new(Screen {
+    Screen {
         resolution,
         framebuffer,
-        _texture: texture,
+        texture,
         resolution_buffer: buffer,
-    })
+    }
 }
 
-struct Screen {
-    resolution: UVec2,
-    framebuffer: Framebuffer,
-    _texture: Texture2D,
-    resolution_buffer: ShaderBuffer<raymarching::uniforms::Resolution>,
-}
-
-impl Renderable for Screen {
-    fn render(&mut self, state: &mut renderer::State) {
-        let compute = raymarching::cMain::get();
-
+impl Screen {
+    pub fn check_resolution(&mut self, state: &State) {
         let resolution = state.display().window.inner_size();
 
         let resolution = uvec2(resolution.width, resolution.height);
 
         if resolution != self.resolution {
             self.resolution = resolution;
-            if let Err(e) = self
-                .resolution_buffer
-                .set_data(&raymarching::uniforms::Resolution {
-                    res: resolution.to_array(),
-                })
-            {
-                eprintln!("Error updating resoltuion: {:?}", e);
+
+            let res_uniform = raymarching::uses::ray::uniforms::iResolution {
+                resolution: resolution.to_array(),
+            };
+
+            if let Err(e) = self.resolution_buffer.set_data(&res_uniform) {
+                eprintln!("Error setting resolution buffer: {:?}", e);
             }
+
+            let tex = Texture2D::new(
+                resolution.x,
+                resolution.y,
+                ColorMode::Rgba23f,
+                TextureParameters {
+                    min_filter: renderer::texture::TextureFilterMode::Linear,
+                },
+            );
+
+            self.texture = tex;
+
+            self.framebuffer
+                .set_tex_2d(TextureAttachPoint::Color0, &self.texture);
         }
+    }
+}
+
+pub fn setup(state: &State) -> Box<dyn Renderable> {
+    let screen = setup_screen(state);
+
+    Box::new(screen)
+}
+
+pub struct Screen {
+    resolution: UVec2,
+    framebuffer: Framebuffer,
+    texture: Texture2D,
+    resolution_buffer: ShaderBuffer<raymarching::uses::ray::uniforms::iResolution>,
+}
+
+impl Renderable for Screen {
+    fn render(&mut self, state: &mut renderer::State) {
+        self.check_resolution(state);
+
+        let compute = raymarching::cMain::get();
 
         self.resolution_buffer.bind();
 
@@ -83,34 +107,21 @@ impl Renderable for Screen {
     }
 }
 
-renderer::compute!(raymarching, {
-    #kernel cMain
-
-    #snippet renderer::camera_matrices
-
+renderer::snippet!(ray, {
     #bind 1
-    uniform Resolution {
-        uvec2 res;
-    } iResolution;
-
-    #bind 0
-    uniform image2D img;
+    uniform iResolution {
+        uvec2 resolution;
+    };
 
     struct Ray {
         vec3 origin;
         vec3 direction;
     }
 
-    float sphere(vec3 sphere_pos, float radius, vec3 point_pos) {
-        return length(point_pos - sphere_pos) - radius;
-    }
+    Ray getRay(ivec2 screen_pos) {
+        vec2 coord = vec2(screen_pos);
 
-    float map(vec3 position) {
-        return max(-sphere(vec3(0, 0, -3), 1, position), sphere(vec3(2, 0, -2), 2, position));
-    }
-
-    Ray getRay(vec2 coord) {
-        vec2 uv = (coord * 2 - iResolution.res.xy) / iResolution.res.y;
+        vec2 uv = (coord * 2 - resolution.xy) / resolution.y;
 
         vec4 far = camera.inverse_projection * vec4(uv, 1, 1);
         vec4 view = camera.view * far;
@@ -120,14 +131,31 @@ renderer::compute!(raymarching, {
         ray.direction = normalize(view.xyz / view.w);
         return ray;
     }
+});
+
+renderer::compute!(raymarching, {
+    #kernel cMain
+
+    #snippet renderer::camera_matrices
+    #snippet crate::raytracing::ray
+
+    #bind 0
+    uniform image2D img;
+
+    float sphere(vec3 sphere_pos, float radius, vec3 point_pos) {
+        return length(point_pos - sphere_pos) - radius;
+    }
+
+    float map(vec3 position) {
+        return max(-sphere(vec3(0, 0, -3), 1, position), sphere(vec3(2, 0, -2), 2, position));
+    }
 
     #size 1 1 1
     void cMain() {
         ivec2 screen_pos = ivec2(gl_GlobalInvocationID.xy);
-
         const int MAX_STEPS = 80;
 
-        Ray ray = getRay(vec2(screen_pos));
+        Ray ray = getRay(screen_pos);
 
         vec3 color = vec3(0);
 
