@@ -82,6 +82,7 @@ fn parse_segments(
             Ok((rest, buf)) => {
                 input = rest;
                 info.buffers.push(buf);
+                continue;
             }
             Err(e) => {
                 if let Some(e) = e {

@@ -74,10 +74,8 @@ impl ShaderType {
             Some(ShaderType::Struct(s.clone()))
         } else if let Some(t) = get_primative(val) {
             Some(ShaderType::Primative(t))
-        } else if let Some(t) = get_texture(val) {
-            Some(ShaderType::Texture(t))
         } else {
-            None
+            get_texture(val).map(ShaderType::Texture)
         }
     }
 }

@@ -2,7 +2,7 @@ use proc_macro::{Diagnostic, Level, TokenTree};
 
 use crate::{
     ShaderInfo,
-    parse::{ident, ident_any, punct},
+    parse::{delimited, ident, ident_any, punct},
     uniform::LayoutBlock,
 };
 
@@ -22,6 +22,12 @@ pub fn parse_buffer<'a>(
     let (input, var_name) = ident_any(input)
         .map(|(i, v)| (i, Some(v.clone())))
         .unwrap_or((input, None));
+
+    let input = if let Ok((i, _)) = delimited(proc_macro::Delimiter::Bracket)(input) {
+        i
+    } else {
+        input
+    };
 
     let (input, _) = punct(';')(input).map_err(|_| {
         if input.is_empty() {
