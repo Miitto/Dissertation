@@ -3,16 +3,13 @@ name = "engine"
 version = "0.1.0"
 edition = "2024"
 
-[build]
-rustflags = ["-Z", "threads=8"]
-
 [workspace]
 members = ["render_common", "renderer", "shader_macros", "shaders"]
 
 [workspace.dependencies]
 render_common = { path = "./render_common" }
 renderer = { path = "./renderer/" }
-glam = "0.29.2"
+glam = "0.30.0"
 shaders = { path = "./shaders" }
 gl = "0.14.0"
 glutin = "0.32.2"
@@ -26,6 +23,3 @@ winit.workspace = true
 gl.workspace = true
 clap = { version = "4.5.31", features = ["derive"] }
 bracket-noise = "0.8.7"
-
-[target.'cfg(windows)'.dependencies]
-optick = { version = "1.3.4" }
