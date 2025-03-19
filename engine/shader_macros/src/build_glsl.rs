@@ -55,14 +55,15 @@ fn get_buffers(info: &ShaderInfo) -> String {
             });
 
             format!(
-                "layout(std430, binding = {}) uniform {} {{\n{}}} {};",
+                "layout(std430, binding = {}) buffer {} {{\n{}}} {}{};",
                 b.bind,
                 b.name,
                 fields,
                 b.var_name
                     .as_ref()
                     .map(|i| i.to_string())
-                    .unwrap_or_default()
+                    .unwrap_or_default(),
+                if b.is_array { "[]" } else { "" }
             )
         })
         .collect()

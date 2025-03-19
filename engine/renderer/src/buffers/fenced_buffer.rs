@@ -139,4 +139,14 @@ impl RawBuffer for FencedRawBuffer {
 
         Ok(())
     }
+
+    fn get_mapping<'a>(&'a mut self) -> super::Mapping<'a> {
+        self.buffer.get_mapping()
+    }
+
+    fn on_map_flush(&mut self) {
+        self.buffer.on_map_flush();
+
+        self.fence.start();
+    }
 }

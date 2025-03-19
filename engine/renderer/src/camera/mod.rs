@@ -11,7 +11,6 @@ pub mod frustum;
 mod perspective;
 
 pub use perspective::PerspectiveCamera;
-use render_common::Program;
 use shaders::Program as _;
 use winit::keyboard::KeyCode;
 
@@ -93,7 +92,7 @@ impl CameraManager {
             position: active.transform().position.to_array(),
         };
 
-        if let Err(e) = self.camera_matrices_buffer.set_data(&matrices) {
+        if let Err(e) = self.camera_matrices_buffer.set_data(&[matrices], 0) {
             eprintln!("Error Setting CameraMatrices: {:?}", e);
         }
     }
@@ -244,7 +243,8 @@ impl Default for CameraManager {
             position: default_camera.transform().position.to_array(),
         };
 
-        let cam_buf = ShaderBuffer::new(matrices).expect("Failed to create camera matrices buffer");
+        let cam_buf =
+            ShaderBuffer::new(&[matrices]).expect("Failed to create camera matrices buffer");
 
         unsafe {
             gl::BindBufferBase(

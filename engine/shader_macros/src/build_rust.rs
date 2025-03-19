@@ -215,7 +215,11 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
 
             let setters = field_names.map(|f| {
                 quote! {
-                    buffer.set_offset_data_no_alloc(offset, &[self.#f])?;
+                    let val = [self.#f];
+                    let size = std::mem::size_of_val(&val);
+                    unsafe {
+                        mapping.write(val.as_ptr() as *const u8, size, offset);
+                    }
                     let align = attr_type_of_val(&self.#f).std140_align();
                     offset += align;
                 }
@@ -248,8 +252,9 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
                         Self::SIZE
                     }
 
-                    fn set_buffer_data<B: #crate_path::buffers::RawBuffer>(&self, buffer: &mut B) -> Result<(), #crate_path::buffers::BufferError> {
-                        let mut offset = 0;
+                    fn set_buffer_data<'a>(&self, mapping: &mut #crate_path::buffers::Mapping<'a>, offset: usize) -> Result<usize, #crate_path::buffers::BufferError> {
+                        #crate_path::profiler::event!("Setting data for uniform block");
+                        let mut offset = offset;
 
                         const fn attr_type_of_val<T: #crate_path::vertex::Attribute>(_: &T)
                                 -> #crate_path::vertex::format::AttributeType
@@ -259,7 +264,7 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
 
                         #(#setters)*
 
-                        Ok(())
+                        Ok(offset)
                     }
                 }
 
@@ -305,11 +310,16 @@ fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenSt
 
             let setters = field_names.map(|f| {
                 quote! {
-                    buffer.set_offset_data_no_alloc(offset, &[self.#f])?;
+                    let val = [self.#f];
+                    let size = std::mem::size_of_val(&val);
+                    unsafe {
+                        mapping.write(val.as_ptr() as *const u8, size, offset);
+                    }
                     let align = attr_type_of_val(&self.#f).std430_align();
                     offset += align;
                 }
             });
+
 
             let size: usize = u.fields.iter().map(|f| match &f.t {
                 ShaderType::Primative(a) => a.std430_align(),
@@ -338,8 +348,9 @@ fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenSt
                         Self::SIZE
                     }
 
-                    fn set_buffer_data<B: #crate_path::buffers::RawBuffer>(&self, buffer: &mut B) -> Result<(), #crate_path::buffers::BufferError> {
-                        let mut offset = 0;
+                    fn set_buffer_data<'a>(&self, mapping: &mut #crate_path::buffers::Mapping<'a>, offset: usize) -> Result<usize, #crate_path::buffers::BufferError> {
+                        #crate_path::profiler::event!("Setting data for buffer block");
+                        let mut offset = offset;
 
                         const fn attr_type_of_val<T: #crate_path::vertex::Attribute>(_: &T)
                                 -> #crate_path::vertex::format::AttributeType
@@ -349,7 +360,7 @@ fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenSt
 
                         #(#setters)*
 
-                        Ok(())
+                        Ok(offset)
                     }
                 }
 

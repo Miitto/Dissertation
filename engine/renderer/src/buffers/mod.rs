@@ -1,6 +1,7 @@
 mod ebo;
 mod fenced_buffer;
 mod gpu_buffer;
+mod mapping;
 mod ssbo;
 mod vao;
 mod vbo;
@@ -8,6 +9,7 @@ mod vbo;
 pub use ebo::*;
 pub use fenced_buffer::*;
 pub use gpu_buffer::*;
+pub use mapping::*;
 pub use ssbo::*;
 pub use vao::*;
 pub use vbo::*;
@@ -55,6 +57,8 @@ pub trait RawBuffer: Buffer {
         dst_offset: usize,
         size: usize,
     ) -> Result<(), BufferError>;
+    fn get_mapping<'a>(&'a mut self) -> Mapping<'a>;
+    fn on_map_flush(&mut self);
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -105,9 +109,7 @@ impl BufferMode {
                     | gl::MAP_READ_BIT
                     | gl::MAP_WRITE_BIT
             }
-            BufferMode::Persistent => {
-                gl::MAP_READ_BIT | gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT
-            }
+            BufferMode::Persistent => gl::MAP_READ_BIT | gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT,
             BufferMode::Immutable => 0,
         }
     }

@@ -10,11 +10,18 @@ pub struct ShaderVar {
     pub name: Ident,
     pub t: ShaderType,
     pub type_span: Option<Span>,
+    pub is_array: bool,
 }
 
 impl Display for ShaderVar {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {}", self.t, self.name)
+        write!(
+            f,
+            "{} {}{}",
+            self.t,
+            self.name,
+            if self.is_array { "[]" } else { "" }
+        )
     }
 }
 

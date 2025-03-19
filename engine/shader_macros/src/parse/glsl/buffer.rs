@@ -23,10 +23,10 @@ pub fn parse_buffer<'a>(
         .map(|(i, v)| (i, Some(v.clone())))
         .unwrap_or((input, None));
 
-    let input = if let Ok((i, _)) = delimited(proc_macro::Delimiter::Bracket)(input) {
-        i
+    let (input, is_array) = if let Ok((i, _)) = delimited(proc_macro::Delimiter::Bracket)(input) {
+        (i, true)
     } else {
-        input
+        (input, false)
     };
 
     let (input, _) = punct(';')(input).map_err(|_| {
@@ -52,6 +52,7 @@ pub fn parse_buffer<'a>(
         name: st.name,
         fields: st.fields,
         var_name,
+        is_array,
     };
 
     Ok((input, buffer))

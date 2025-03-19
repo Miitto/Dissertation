@@ -27,6 +27,7 @@ pub struct LayoutBlock {
     pub name: Ident,
     pub fields: Vec<ShaderVar>,
     pub var_name: Option<Ident>,
+    pub is_array: bool,
 }
 
 #[expect(dead_code)]

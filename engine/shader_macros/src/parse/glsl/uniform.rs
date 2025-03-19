@@ -143,6 +143,7 @@ fn check_block<'a>(
         name: st.name,
         fields: st.fields,
         var_name,
+        is_array: false,
     });
 
     Ok((input, uniform))

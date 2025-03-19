@@ -1,4 +1,4 @@
-use super::{Buffer, BufferError, BufferMode, RawBuffer};
+use super::{Buffer, BufferError, BufferMode, Mapping, RawBuffer};
 
 pub struct GpuBuffer {
     id: gl::types::GLuint,
@@ -226,6 +226,20 @@ impl RawBuffer for GpuBuffer {
 
         Ok(())
     }
+
+    fn get_mapping<'a>(&'a mut self) -> super::Mapping<'a> {
+        if let Some(mapping) = self.mapping {
+            Mapping::new(self, mapping, self.size)
+        } else {
+            panic!(
+                "Buffer has no mapping: Buffer Type: {:?} | Size: {}",
+                self.buf_mode(),
+                self.size()
+            );
+        }
+    }
+
+    fn on_map_flush(&mut self) {}
 }
 
 impl Drop for GpuBuffer {

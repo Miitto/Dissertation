@@ -1,7 +1,7 @@
 use proc_macro::{Diagnostic, Level, TokenTree};
 
 use crate::Result;
-use crate::parse::ident_any;
+use crate::parse::{delimited, ident_any};
 
 use crate::{shader_info::ShaderInfo, shader_var::ShaderVar};
 
@@ -34,11 +34,18 @@ pub fn parse_var<'a>(
         )
     })?;
 
+    let (input, is_array) = if let Ok((i, _)) = delimited(proc_macro::Delimiter::Bracket)(input) {
+        (i, true)
+    } else {
+        (input, false)
+    };
+
     if let Ok(type_found) = info.get_type(type_name) {
         let var = ShaderVar {
             name: name.clone(),
             t: type_found,
             type_span: Some(type_name.span()),
+            is_array,
         };
 
         Ok((input, var))
