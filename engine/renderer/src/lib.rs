@@ -18,16 +18,22 @@ mod input;
 mod state;
 mod uniforms;
 
+#[cfg(target_os = "windows")]
+pub use optick as profiler;
+
+#[cfg(not(target_os = "windows"))]
+pub use linux_optick_fake as profiler;
+
 pub mod bounds;
 pub mod buffers;
 pub mod camera;
 pub mod fence;
 pub mod framebuffer;
 pub mod indices;
-pub mod material;
+pub mod indirect;
+pub mod linux_optick_fake;
 pub mod math;
 pub mod mesh;
-pub mod object;
 pub mod texture;
 pub mod vertex;
 

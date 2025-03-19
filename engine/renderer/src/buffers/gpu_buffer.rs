@@ -27,6 +27,7 @@ impl GpuBuffer {
         &mut self,
         data: *const std::os::raw::c_void,
     ) -> std::result::Result<&mut Self, BufferError> {
+        crate::profiler::event!("Creating buffer");
         // println!(
         //     "Creating Buffer with size {} and length: {}",
         //     self.size, self.count
@@ -149,6 +150,7 @@ impl RawBuffer for GpuBuffer {
     where
         T: Sized,
     {
+        crate::profiler::event!("Buffer write");
         let size = std::mem::size_of_val(data);
         if size + offset > self.size() {
             panic!(
@@ -210,6 +212,7 @@ impl RawBuffer for GpuBuffer {
         dst_offset: usize,
         size: usize,
     ) -> Result<(), BufferError> {
+        crate::profiler::event!("Buffer Copy");
         if self.size < size + src_offset || other.size() < size + dst_offset {
             return Err(BufferError::InvalidSize);
         }

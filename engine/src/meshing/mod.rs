@@ -18,7 +18,7 @@ impl Renderable for Triangle {
             val: Mat4::IDENTITY.to_cols_array_2d(),
         };
 
-        let uniforms = ShaderBuffer::new(uniforms).unwrap();
+        let uniforms = ShaderBuffer::new(&[uniforms]).unwrap();
         uniforms.bind();
 
         let program = triangle::Program::get();

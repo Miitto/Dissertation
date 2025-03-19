@@ -25,6 +25,7 @@ impl State {
         M: Mesh<V, I>,
         U: Uniforms,
     {
+        crate::profiler::event!("Draw");
         program.bind();
         uniforms.bind(program);
         self.cameras.bind_camera_uniforms();
@@ -56,6 +57,7 @@ impl State {
     }
 
     pub fn new_frame(&mut self) {
+        crate::profiler::next_frame();
         self.delta_time = self.frame_time();
         self.last_frame_time = std::time::Instant::now();
 
@@ -67,6 +69,7 @@ impl State {
     }
 
     pub fn end_frame(&mut self) {
+        crate::profiler::event!("Frame end");
         self.input.end_frame();
 
         let display = self.display();
@@ -123,6 +126,7 @@ impl State {
     }
 
     pub fn handle_input(&mut self) {
+        crate::profiler::event!("Handle Input");
         let delta = self.delta();
         self.cameras.handle_input(&self.input, delta);
     }

@@ -48,8 +48,13 @@ fn main() {
 
     let event_loop = make_event_loop();
 
+    let test_name = format!("{:?}_{:?}", args.test, args.scene);
+
     let mut app = App::new(args);
+
+    renderer::profiler::start_capture();
     let _ = event_loop.run_app(&mut app);
+    renderer::profiler::stop_capture(test_name.as_str());
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
@@ -122,6 +127,7 @@ impl ApplicationHandler for App {
         _id: winit::window::WindowId,
         event: WindowEvent,
     ) {
+        renderer::profiler::event!("Window Event");
         match event {
             WindowEvent::CloseRequested => event_loop.exit(),
             WindowEvent::Resized(window_size) => {

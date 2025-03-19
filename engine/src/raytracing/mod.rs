@@ -19,7 +19,7 @@ pub fn setup_screen(state: &State) -> Screen {
         resolution: resolution.to_array(),
     };
 
-    let buffer = ShaderBuffer::new(res_uniform).expect("Failed to make resolution buffer");
+    let buffer = ShaderBuffer::new(&[res_uniform]).expect("Failed to make resolution buffer");
 
     let texture = Texture2D::new(
         resolution.x,
@@ -58,7 +58,7 @@ impl Screen {
                 resolution: resolution.to_array(),
             };
 
-            if let Err(e) = self.resolution_buffer.set_data(&res_uniform) {
+            if let Err(e) = self.resolution_buffer.set_data(&[res_uniform], 0) {
                 eprintln!("Error setting resolution buffer: {:?}", e);
             }
 

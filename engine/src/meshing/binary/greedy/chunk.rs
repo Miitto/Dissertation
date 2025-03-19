@@ -15,13 +15,16 @@ const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
     voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    mesh: NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>,
+    bounds: BoundingHeirarchy,
+    instances: Vec<greedy_voxel::Instance>,
+    mesh: Option<NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>>,
     needs_update: bool,
 }
 
 impl Chunk {
     fn new(
         voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+        make_mesh: bool,
         frustum_cull: bool,
     ) -> Self {
         let vertices = vec![
@@ -31,16 +34,26 @@ impl Chunk {
             greedy_voxel::Vertex::new([1, 0, 1]),
         ];
 
-        let mut mesh = NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
-            .expect("Failed to make greedy chunk NInstancedMesh");
+        let mut mesh = if make_mesh {
+            Some(
+                NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
+                    .expect("Failed to make greedy chunk NInstancedMesh"),
+            )
+        } else {
+            None
+        };
 
         if frustum_cull {
-            mesh.enable_frustum_culling();
+            if let Some(mesh) = &mut mesh {
+                mesh.enable_frustum_culling();
+            }
         }
 
         Self {
             voxels,
             mesh,
+            bounds: BoundingHeirarchy::default(),
+            instances: vec![],
             needs_update: true,
         }
     }
@@ -56,18 +69,25 @@ impl Chunk {
         self.invalidate()
     }
 
-    pub fn fill(block_type: BlockType, frustum_cull: bool) -> Self {
+    pub fn fill(block_type: BlockType, make_mesh: bool, frustum_cull: bool) -> Self {
         let voxels =
             Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
-        Self::new(voxels, frustum_cull)
+        Self::new(voxels, make_mesh, frustum_cull)
     }
 
     fn invalidate(&mut self) {
         self.needs_update = true;
     }
 
+    pub fn bounds(&self) -> &BoundingHeirarchy {
+        &self.bounds
+    }
+
     pub fn update_bounds(&mut self, bounds: BoundingHeirarchy) {
-        self.mesh.set_bounds(bounds);
+        self.bounds = bounds;
+        if let Some(mesh) = &mut self.mesh {
+            mesh.set_bounds(bounds);
+        }
     }
 
     pub fn update(&mut self) {
@@ -79,7 +99,7 @@ impl Chunk {
 
         let greedy = make_greedy_faces(get_fn);
 
-        let mut instances: Vec<greedy_voxel::Instance> = vec![];
+        self.instances.clear();
 
         for dir in Dir::all() {
             for face in greedy[usize::from(dir)].iter() {
@@ -94,18 +114,27 @@ impl Chunk {
                 )
                 .rotate_on_dir();
 
-                instances.push(greedy_voxel::Instance { data: data.into() });
+                self.instances
+                    .push(greedy_voxel::Instance { data: data.into() });
             }
         }
 
-        if let Err(e) = self.mesh.set_instances(instances.as_slice()) {
-            eprintln!("Error: {:?}", e);
+        if let Some(mesh) = &mut self.mesh {
+            if let Err(e) = mesh.set_instances(self.instances.as_slice()) {
+                eprintln!("Error: {:?}", e);
+            }
         }
 
         self.needs_update = false;
     }
 
-    pub fn mesh(&mut self) -> &mut NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance> {
-        &mut self.mesh
+    pub fn mesh(
+        &mut self,
+    ) -> Option<&mut NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>> {
+        self.mesh.as_mut()
+    }
+
+    pub fn instances(&self) -> &[greedy_voxel::Instance] {
+        &self.instances
     }
 }

@@ -4,9 +4,17 @@ use std::collections::HashMap;
 use chunk::Chunk;
 use glam::{ivec3, vec3, vec4};
 use renderer::{
-    DrawMode, Renderable, State, bounds::BoundingHeirarchy, mesh::ninstanced::NInstancedMesh,
+    DrawMode, Renderable, SSBO, State, Uniforms,
+    bounds::{BoundingHeirarchy, BoundingVolume},
+    buffers::{Buffer, BufferMode, FencedRawBuffer, GpuBuffer, ShaderBuffer},
+    camera::frustum::Frustum,
+    indirect::DrawArraysIndirectCommand,
+    mesh::{Mesh, ninstanced::NInstancedMesh},
 };
-use voxel::greedy_voxel;
+use voxel::{
+    greedy_voxel,
+    greedy_voxel_combined::{self, buffers::ChunkData},
+};
 
 use crate::{Args, common::BlockType, tests::test_scene};
 
@@ -14,7 +22,7 @@ mod chunk;
 mod voxel;
 
 pub fn setup(args: &Args, _state: &State) -> ChunkManager {
-    let mut manager = ChunkManager::new(args.frustum_cull);
+    let mut manager = ChunkManager::new(args.combine, args.frustum_cull);
 
     let data = test_scene(args);
 
@@ -36,7 +44,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
         let chunk = manager
             .chunks
             .entry(chunk_pos)
-            .or_insert_with(|| Chunk::fill(BlockType::Air, true));
+            .or_insert_with(|| Chunk::fill(BlockType::Air, !args.combine, true));
 
         let mut chunk_x = pos[0].abs() % 32;
         let mut chunk_y = pos[1].abs() % 32;
@@ -59,11 +67,36 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
         chunk.set(pos, block);
     }
 
-    for (pos, chunk) in manager.chunks.iter_mut() {
-        let pos = vec3(pos[0] as f32, pos[1] as f32, pos[2] as f32) * 32.0;
+    let mut instance_data: Vec<greedy_voxel_combined::Instance> = vec![];
+
+    for (position, chunk) in manager.chunks.iter_mut() {
+        let pos = vec3(position[0] as f32, position[1] as f32, position[2] as f32) * 32.0;
         let end_pos = pos + 32.0;
 
         chunk.update_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
+
+        if let Some(combined) = &mut manager.combined {
+            let order = &mut combined.pos_order;
+
+            chunk.update();
+            let instances = chunk.instances();
+
+            instance_data.extend(
+                instances
+                    .iter()
+                    .map(|i| greedy_voxel_combined::Instance { data: i.data }),
+            );
+            order.push((*position, instances.len()));
+        }
+    }
+
+    dbg!(instance_data.len());
+
+    if let Some(combined) = &mut manager.combined {
+        println!("Setting instance data");
+        if let Err(e) = combined.mesh.set_instances(&instance_data) {
+            eprintln!("Failed to set combined greedy instances: {:?}", e);
+        }
     }
 
     println!("Setup Finished");
@@ -73,52 +106,176 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
 #[allow(dead_code)]
 pub struct ChunkManager {
     chunks: HashMap<[i32; 3], chunk::Chunk>,
-    mesh: NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>,
+    combined: Option<CombinedInstanceData>,
+    frustum_cull: bool,
+}
+
+pub struct CombinedInstanceData {
+    pub pos_order: Vec<([i32; 3], usize)>,
+    chunk_data_buffer: ShaderBuffer<greedy_voxel_combined::buffers::ChunkData>,
+    indirect_buffer: GpuBuffer,
+    mesh: NInstancedMesh<greedy_voxel_combined::Vertex, greedy_voxel_combined::Instance>,
 }
 
 impl ChunkManager {
-    pub fn new(frustum_cull: bool) -> Self {
+    pub fn new(combine: bool, frustum_cull: bool) -> Self {
         let vertices = vec![
-            greedy_voxel::Vertex::new([0, 0, 0]),
-            greedy_voxel::Vertex::new([1, 0, 0]),
-            greedy_voxel::Vertex::new([0, 0, 1]),
-            greedy_voxel::Vertex::new([1, 0, 1]),
+            greedy_voxel_combined::Vertex::new([0, 0, 0]),
+            greedy_voxel_combined::Vertex::new([1, 0, 0]),
+            greedy_voxel_combined::Vertex::new([0, 0, 1]),
+            greedy_voxel_combined::Vertex::new([1, 0, 1]),
         ];
 
-        let mut mesh: NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance> =
-            NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
+        let combined = if combine {
+            let mesh = NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
                 .expect("Failed to create greedy ChunkManager mesh");
 
-        if frustum_cull {
-            mesh.enable_frustum_culling();
-        }
+            Some(CombinedInstanceData {
+                mesh,
+                pos_order: vec![],
+                chunk_data_buffer: ShaderBuffer::new(&[])
+                    .expect("Failed to make shader buffer for chunk positions"),
+                indirect_buffer: GpuBuffer::empty(
+                    std::mem::size_of::<DrawArraysIndirectCommand>() * 100,
+                    BufferMode::Persistent,
+                )
+                .expect("Failed to make indirect buffer"),
+            })
+        } else {
+            None
+        };
 
         Self {
             chunks: HashMap::new(),
-            mesh,
+            combined,
+            frustum_cull,
         }
     }
 }
 
 impl Renderable for ChunkManager {
     fn render(&mut self, state: &mut renderer::State) {
-        for (pos, chunk) in &mut self.chunks {
-            let ipos = ivec3(pos[0], pos[1], pos[2]) * 32;
-
-            chunk.update();
-
-            let mesh = chunk.mesh();
-
-            let uniforms = greedy_voxel::Uniforms {
-                chunk_position: ipos.to_array(),
-                sky_light_color: vec4(1.0, 1.0, 1.0, 1.0).to_array(),
-                sky_light_direction: vec3(-1.0, -1.0, -1.0).normalize().to_array(),
-                ambient_light: 0.5,
-            };
-
-            let program = greedy_voxel::Program::get();
-
-            state.draw(mesh, &program, &uniforms)
+        renderer::profiler::event!("Greedy Render");
+        if self.combined.is_some() {
+            render_combined(self, state);
+        } else {
+            render_seperate(self, state);
         }
     }
+}
+
+fn render_seperate(manager: &mut ChunkManager, state: &mut renderer::State) {
+    for (pos, chunk) in &mut manager.chunks {
+        let ipos = ivec3(pos[0], pos[1], pos[2]) * 32;
+
+        chunk.update();
+
+        let mesh = chunk.mesh().expect("Chunk should of had a mesh");
+
+        let uniforms = greedy_voxel::Uniforms {
+            chunk_position: ipos.to_array(),
+        };
+
+        let program = greedy_voxel::Program::get();
+
+        state.draw(mesh, &program, &uniforms)
+    }
+}
+
+fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
+    renderer::profiler::event!("Greedy Render Combined");
+    let frustum = &state.cameras.game_frustum();
+    let combined = manager
+        .combined
+        .as_mut()
+        .expect("Manager should of had combined");
+
+    combined.mesh.bind();
+    let program = greedy_voxel_combined::Program::get();
+    program.bind();
+
+    fn setup_multidraw(
+        chunks: &HashMap<[i32; 3], Chunk>,
+        combined: &CombinedInstanceData,
+        frustum: &Frustum,
+    ) -> (Vec<ChunkData>, Vec<DrawArraysIndirectCommand>) {
+        renderer::profiler::event!("Greedy setup multidraw");
+
+        let mut instance = 0;
+
+        let mut uniforms = vec![];
+        let mut draw_params = vec![];
+
+        for (pos, count) in combined.pos_order.iter() {
+            let chunk = if let Some(chunk) = chunks.get(pos) {
+                chunk
+            } else {
+                instance += *count as u32;
+                continue;
+            };
+
+            if chunk.bounds().intersects(frustum).is_none() {
+                instance += *count as u32;
+                continue;
+            }
+
+            let vec = ivec3(pos[0], pos[1], pos[2]) * 32;
+
+            let uniform = greedy_voxel_combined::buffers::ChunkData {
+                pos: vec.to_array(),
+            };
+
+            uniforms.push(uniform);
+
+            let indirect = DrawArraysIndirectCommand {
+                vertex_count: 4,
+                instance_count: *count as u32,
+                first: 0,
+                base_instance: instance,
+            };
+
+            draw_params.push(indirect);
+
+            instance += *count as u32;
+        }
+
+        (uniforms, draw_params)
+    }
+
+    let (uniforms, draw_params) = setup_multidraw(&manager.chunks, combined, frustum);
+
+    fn set_chunk_data(chunk_data: Vec<ChunkData>, combined: &mut CombinedInstanceData) {
+        renderer::profiler::event!("Greedy set combined chunk data");
+        if let Err(e) = combined.chunk_data_buffer.set_data(&chunk_data, 0) {
+            eprintln!("Error setting chunk data: {:?}", e);
+        }
+    }
+    set_chunk_data(uniforms, combined);
+    combined.chunk_data_buffer.bind();
+
+    fn set_indirect_commands(
+        draw_params: Vec<DrawArraysIndirectCommand>,
+        combined: &mut CombinedInstanceData,
+    ) {
+        renderer::profiler::event!("Greedy set combined indirect commands");
+        if let Err(e) = combined.indirect_buffer.set_data(&draw_params) {
+            eprintln!("Error setting indirect commands: {:?}", e);
+        }
+    }
+
+    let len = draw_params.len() as i32;
+    set_indirect_commands(draw_params, combined);
+
+    unsafe {
+        gl::BindBuffer(gl::DRAW_INDIRECT_BUFFER, combined.indirect_buffer.id());
+    }
+
+    fn draw_combined(len: i32) {
+        renderer::profiler::event!("Greedy multidraw");
+        unsafe {
+            gl::MultiDrawArraysIndirect(DrawMode::TriangleStrip.into(), std::ptr::null(), len, 0);
+        }
+    }
+
+    draw_combined(len);
 }
