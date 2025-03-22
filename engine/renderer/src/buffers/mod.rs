@@ -57,7 +57,8 @@ pub trait RawBuffer: Buffer {
         dst_offset: usize,
         size: usize,
     ) -> Result<(), BufferError>;
-    fn get_mapping<'a>(&'a mut self) -> Mapping<'a>;
+    fn raw_mapping(&self) -> Option<*mut std::os::raw::c_void>;
+    fn get_mapping<'a>(&'a mut self) -> Mapping<'a, Self>;
     fn on_map_flush(&mut self);
 }
 
@@ -90,13 +91,16 @@ pub enum BufferMode {
     Immutable,
     Dynamic,
     Persistent,
+    PersistentCoherent,
 }
 
 impl BufferMode {
     pub fn to_buf_data(&self) -> gl::types::GLenum {
         match self {
             BufferMode::Default | BufferMode::Immutable => gl::STATIC_DRAW,
-            BufferMode::Dynamic | BufferMode::Persistent => gl::DYNAMIC_DRAW,
+            BufferMode::Dynamic | BufferMode::Persistent | BufferMode::PersistentCoherent => {
+                gl::DYNAMIC_DRAW
+            }
         }
     }
 
@@ -110,6 +114,9 @@ impl BufferMode {
                     | gl::MAP_WRITE_BIT
             }
             BufferMode::Persistent => gl::MAP_READ_BIT | gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT,
+            BufferMode::PersistentCoherent => {
+                gl::MAP_READ_BIT | gl::MAP_WRITE_BIT | gl::MAP_PERSISTENT_BIT | gl::MAP_COHERENT_BIT
+            }
             BufferMode::Immutable => 0,
         }
     }

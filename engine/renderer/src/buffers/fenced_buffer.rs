@@ -1,6 +1,6 @@
 use crate::fence::Fence;
 
-use super::{Buffer, BufferError, GpuBuffer, RawBuffer};
+use super::{Buffer, BufferError, BufferMode, GpuBuffer, Mapping, RawBuffer};
 
 pub trait FencedBuffer: Buffer {
     type Buffer: Buffer;
@@ -140,8 +140,25 @@ impl RawBuffer for FencedRawBuffer {
         Ok(())
     }
 
-    fn get_mapping<'a>(&'a mut self) -> super::Mapping<'a> {
-        self.buffer.get_mapping()
+    fn raw_mapping(&self) -> Option<*mut std::os::raw::c_void> {
+        self.buffer.raw_mapping()
+    }
+
+    fn get_mapping<'a>(&'a mut self) -> Mapping<'a, Self> {
+        if let Some(mapping) = self.buffer.raw_mapping() {
+            Mapping::new(
+                self,
+                mapping,
+                self.size(),
+                matches!(self.buf_mode(), BufferMode::PersistentCoherent),
+            )
+        } else {
+            panic!(
+                "Buffer has no mapping: Buffer Type: {:?} | Size: {}",
+                self.buf_mode(),
+                self.size()
+            );
+        }
     }
 
     fn on_map_flush(&mut self) {

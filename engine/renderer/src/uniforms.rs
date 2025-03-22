@@ -2,7 +2,7 @@ use std::ffi::CString;
 
 use render_common::Program;
 
-use crate::buffers::{BufferError, Mapping};
+use crate::buffers::{BufferError, Mapping, RawBuffer};
 
 pub trait Uniforms {
     fn bind(&self, program: &Program);
@@ -16,9 +16,9 @@ pub fn get_uniform_location(program: &Program, name: &str) -> usize {
 pub trait LayoutBlock: std::fmt::Debug {
     fn bind_point() -> u32;
     fn size() -> usize;
-    fn set_buffer_data<'a>(
+    fn set_buffer_data<'a, B: RawBuffer>(
         &self,
-        mapping: &mut Mapping<'a>,
+        mapping: &mut Mapping<'a, B>,
         offset: usize,
     ) -> Result<usize, BufferError>;
 }

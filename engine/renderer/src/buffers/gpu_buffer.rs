@@ -43,7 +43,10 @@ impl GpuBuffer {
             );
         }
 
-        let mapping = if let BufferMode::Persistent = self.mode {
+        let mapping = if matches!(
+            self.mode,
+            BufferMode::Persistent | BufferMode::PersistentCoherent
+        ) {
             Some(unsafe {
                 gl::MapNamedBufferRange(self.id, 0, self.size as isize, self.mode.to_buf_store())
             })
@@ -162,13 +165,13 @@ impl RawBuffer for GpuBuffer {
         }
         assert!(size > 0);
 
-        if let Some(mapping) = self.mapping {
-            unsafe {
-                std::ptr::copy_nonoverlapping(
-                    data.as_ptr() as *const u8,
-                    mapping.add(offset) as *mut u8,
-                    size,
-                );
+        if self.mapping.is_some() {
+            {
+                let mut mapping = self.get_mapping();
+
+                unsafe {
+                    mapping.write(data.as_ptr() as *const u8, size, offset);
+                }
             }
 
             self.count = data.len();
@@ -230,9 +233,18 @@ impl RawBuffer for GpuBuffer {
         Ok(())
     }
 
-    fn get_mapping<'a>(&'a mut self) -> super::Mapping<'a> {
+    fn raw_mapping(&self) -> Option<*mut std::os::raw::c_void> {
+        self.mapping
+    }
+
+    fn get_mapping<'a>(&'a mut self) -> super::Mapping<'a, GpuBuffer> {
         if let Some(mapping) = self.mapping {
-            Mapping::new(self, mapping, self.size)
+            Mapping::new(
+                self,
+                mapping,
+                self.size,
+                matches!(self.buf_mode(), BufferMode::PersistentCoherent),
+            )
         } else {
             panic!(
                 "Buffer has no mapping: Buffer Type: {:?} | Size: {}",

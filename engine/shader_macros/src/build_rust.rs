@@ -252,7 +252,7 @@ fn uniform_block_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::
                         Self::SIZE
                     }
 
-                    fn set_buffer_data<'a>(&self, mapping: &mut #crate_path::buffers::Mapping<'a>, offset: usize) -> Result<usize, #crate_path::buffers::BufferError> {
+                    fn set_buffer_data<'a, B: #crate_path::buffers::RawBuffer>(&self, mapping: &mut #crate_path::buffers::Mapping<'a, B>, offset: usize) -> Result<usize, #crate_path::buffers::BufferError> {
                         #crate_path::profiler::event!("Setting data for uniform block");
                         let mut offset = offset;
 
@@ -348,7 +348,7 @@ fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::TokenSt
                         Self::SIZE
                     }
 
-                    fn set_buffer_data<'a>(&self, mapping: &mut #crate_path::buffers::Mapping<'a>, offset: usize) -> Result<usize, #crate_path::buffers::BufferError> {
+                    fn set_buffer_data<'a, B: #crate_path::buffers::RawBuffer>(&self, mapping: &mut #crate_path::buffers::Mapping<'a, B>, offset: usize) -> Result<usize, #crate_path::buffers::BufferError> {
                         #crate_path::profiler::event!("Setting data for buffer block");
                         let mut offset = offset;
 
