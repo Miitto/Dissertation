@@ -93,7 +93,7 @@ renderer::snippet!(get_pos, {
             // Backward
             case 5: {
                 z = 1;
-                x = v_x * w;
+                x = (1-v_x) * w;
                 y = (1-v_z) * h;
 
                 normal.z = 1;

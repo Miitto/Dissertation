@@ -64,25 +64,6 @@ impl ChunkManager {
 
 impl Renderable for ChunkManager {
     fn render(&mut self, state: &mut renderer::State) {
-        let right = vec4(1., 0., 0., 0.0);
-        let up = vec4(0., 1., 0., 0.0);
-        let forward = vec4(0., 0., -1., 0.0);
-
-        for (pos, chunk) in &self.chunks {
-            let model_matrix = mat4(
-                right,
-                up,
-                forward,
-                vec4(pos[0] as f32, pos[1] as f32, pos[2] as f32, 1.0),
-            );
-
-            let _instances = chunk.instance_positions();
-
-            let _uniforms = culled_voxel::Uniforms {
-                modelMatrix: model_matrix.to_cols_array_2d(),
-                viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
-                projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
-            };
-        }
+        todo!("Culled")
     }
 }
