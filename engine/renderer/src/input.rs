@@ -49,6 +49,14 @@ impl Input {
         }
     }
 
+    pub fn is_pressed_no_repeat(&self, key: &KeyCode) -> bool {
+        if let Some(key_event) = self.keys.get(key) {
+            key_event.state.is_pressed() && !key_event.repeat
+        } else {
+            false
+        }
+    }
+
     pub fn set_key(&mut self, key: KeyCode, key_event: KeyEvent) {
         self.keys.insert(key, key_event);
     }

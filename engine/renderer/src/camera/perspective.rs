@@ -117,6 +117,10 @@ impl Camera for PerspectiveCamera {
     }
 
     fn handle_input(&mut self, input: &Input, delta: f32) {
+        if input.is_pressed_no_repeat(&KeyCode::F5) {
+            println!("Pos: {}", self.transform.position);
+        }
+
         let scroll = input.wheel();
 
         self.mouse_sensitivity += 0.001 * scroll;
