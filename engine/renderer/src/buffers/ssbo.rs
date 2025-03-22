@@ -1,8 +1,6 @@
 use std::marker::PhantomData;
 
-use render_common::Program;
-
-use crate::{LayoutBlock, SSBO, SSBOBlock, UniformBlock, Uniforms};
+use crate::{LayoutBlock, SSBO, SSBOBlock, UniformBlock};
 
 use super::{Buffer, BufferError, BufferMode, FencedRawBuffer, RawBuffer};
 

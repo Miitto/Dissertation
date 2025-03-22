@@ -1,5 +1,3 @@
-pub use gl::GetUniformLocation;
-
 pub trait UniformValue: std::fmt::Debug {
     fn set_uniform(&self, location: usize);
 }
