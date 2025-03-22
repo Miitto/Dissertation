@@ -128,6 +128,17 @@ impl State {
     pub fn handle_input(&mut self) {
         crate::profiler::event!("Handle Input");
         let delta = self.delta();
+
+        unsafe {
+            if self.input.is_pressed_no_repeat(&KeyCode::F1) {
+                gl::PolygonMode(gl::FRONT_AND_BACK, gl::POINT);
+            } else if self.input.is_pressed_no_repeat(&KeyCode::F2) {
+                gl::PolygonMode(gl::FRONT_AND_BACK, gl::LINE);
+            } else if self.input.is_pressed_no_repeat(&KeyCode::F3) {
+                gl::PolygonMode(gl::FRONT_AND_BACK, gl::FILL);
+            }
+        }
+
         self.cameras.handle_input(&self.input, delta);
     }
 }

@@ -165,10 +165,10 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
 
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
-        // gl::Enable(gl::CULL_FACE);
+        gl::Enable(gl::CULL_FACE);
 
         gl::CullFace(gl::BACK);
-        gl::FrontFace(gl::CW);
+        gl::FrontFace(gl::CCW);
 
         gl::DepthFunc(gl::LESS);
     }
