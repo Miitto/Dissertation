@@ -163,7 +163,11 @@ impl RawBuffer for GpuBuffer {
                 self.size()
             );
         }
-        assert!(size > 0);
+
+        // Nothing to write, and will error if size is 0 (at least on NVidia)
+        if size == 0 {
+            return Ok(());
+        }
 
         if self.mapping.is_some() {
             {
