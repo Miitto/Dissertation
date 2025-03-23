@@ -4,9 +4,9 @@ use glam::{IVec3, ivec3};
 
 use crate::common::BlockType;
 
-use super::svt64::buffers::{VoxelLeaf, VoxelNode};
+use super::svt64::structs::Node;
 
-impl VoxelNode {
+impl Node {
     pub fn is_leaf(&self) -> bool {
         self.data_offset & 1 == 1
     }
@@ -25,9 +25,7 @@ impl VoxelNode {
     }
 }
 
-pub fn generate_tree(
-    voxels: &HashMap<[i32; 3], BlockType>,
-) -> (VoxelNode, Vec<VoxelNode>, Vec<VoxelLeaf>) {
+pub fn generate_tree(voxels: &HashMap<[i32; 3], BlockType>) -> (Vec<Node>, Vec<u32>) {
     let mut nodes = vec![];
     let mut children = vec![];
 
@@ -46,19 +44,19 @@ pub fn generate_tree(
     }
     .max(2);
 
-    let node = recurse_tree(voxels, &mut nodes, &mut children, max_scale, ivec3(0, 0, 0));
+    nodes[0] = recurse_tree(voxels, &mut nodes, &mut children, max_scale, ivec3(0, 0, 0));
 
-    (node, nodes, children)
+    (nodes, children)
 }
 
 fn recurse_tree(
     voxels: &HashMap<[i32; 3], BlockType>,
-    nodes: &mut Vec<VoxelNode>,
-    child_data: &mut Vec<VoxelLeaf>,
+    nodes: &mut Vec<Node>,
+    child_data: &mut Vec<u32>,
     scale: usize,
     pos: IVec3,
-) -> VoxelNode {
-    let mut node = VoxelNode {
+) -> Node {
+    let mut node = Node {
         data_offset: 0,
         mask_lower: 0,
         mask_upper: 0,
@@ -103,8 +101,8 @@ fn recurse_tree(
 
 fn make_leaf(
     voxels: &HashMap<[i32; 3], BlockType>,
-    tree: &mut VoxelNode,
-    child_data: &mut Vec<VoxelLeaf>,
+    tree: &mut Node,
+    child_data: &mut Vec<u32>,
     pos: IVec3,
 ) {
     assert_eq!((pos.x | pos.y | pos.z) % 4, 0);
@@ -128,7 +126,7 @@ fn make_leaf(
     tree.set_child_ptr(child_data.len() as u32);
     child_data.extend(voxel_cube.iter().filter_map(|&v| {
         if v.is_solid() {
-            Some(VoxelLeaf { data: (*v).into() })
+            Some(Into::<u32>::into(*v))
         } else {
             None
         }

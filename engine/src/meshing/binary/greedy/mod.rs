@@ -202,12 +202,12 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
         chunks: &HashMap<[i32; 3], RefCell<Chunk>>,
         combined: &CombinedInstanceData,
         frustum: &Frustum,
-    ) -> (Vec<ChunkData>, Vec<DrawArraysIndirectCommand>) {
+    ) -> (ChunkData, Vec<DrawArraysIndirectCommand>) {
         renderer::profiler::event!("Greedy setup multidraw");
 
         let mut instance = 0;
 
-        let mut uniforms = vec![];
+        let mut chunk_data = ChunkData { pos: vec![] };
         let mut draw_params = vec![];
 
         for (pos, count) in combined.pos_order.iter() {
@@ -225,11 +225,7 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
 
             let vec = ivec3(pos[0], pos[1], pos[2]) * 32;
 
-            let uniform = greedy_voxel_combined::buffers::ChunkData {
-                pos: vec.to_array(),
-            };
-
-            uniforms.push(uniform);
+            chunk_data.pos.push(vec.to_array());
 
             let indirect = DrawArraysIndirectCommand {
                 vertex_count: 4,
@@ -243,14 +239,14 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
             instance += *count as u32;
         }
 
-        (uniforms, draw_params)
+        (chunk_data, draw_params)
     }
 
     let (uniforms, draw_params) = setup_multidraw(&manager.chunks, combined, frustum);
 
-    fn set_chunk_data(chunk_data: Vec<ChunkData>, combined: &mut CombinedInstanceData) {
+    fn set_chunk_data(chunk_data: ChunkData, combined: &mut CombinedInstanceData) {
         renderer::profiler::event!("Greedy set combined chunk data");
-        if let Err(e) = combined.chunk_data_buffer.set_data(&chunk_data, 0) {
+        if let Err(e) = combined.chunk_data_buffer.set_single(&chunk_data, 0) {
             eprintln!("Error setting chunk data: {:?}", e);
         }
     }

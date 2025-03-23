@@ -15,7 +15,7 @@ pub fn get_uniform_location(program: &Program, name: &str) -> usize {
 
 pub trait LayoutBlock: std::fmt::Debug {
     fn bind_point() -> u32;
-    fn size() -> usize;
+    fn size(&self) -> usize;
     fn set_buffer_data<'a, B: RawBuffer>(
         &self,
         mapping: &mut Mapping<'a, B>,

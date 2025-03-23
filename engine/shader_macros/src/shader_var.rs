@@ -41,6 +41,17 @@ pub enum ShaderType {
     Struct(ShaderStruct),
 }
 
+impl ShaderType {
+    pub fn std430_align(&self) -> usize {
+        match self {
+            ShaderType::Primative(a) => a.std430_align(),
+            ShaderType::Texture(_) => todo!("Texture in interface block"),
+            ShaderType::Struct(s) => s.std430_align(),
+            ShaderType::Void => 0,
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum TextureType {
     Image2D,
@@ -147,7 +158,10 @@ impl ToTokens for ShaderType {
             Self::Texture(t) => match t {
                 TextureType::Image2D => tokens.extend(quote! {renderer::texture::Texture2D}),
             },
-            _ => panic!("Attempted to convert struct to rust type"),
+            Self::Struct(s) => {
+                let name = format_ident!("{}", s.name.to_string());
+                tokens.extend(quote! {#name})
+            }
         }
     }
 }
@@ -157,6 +171,12 @@ impl ToTokens for ShaderType {
 pub(crate) struct ShaderStruct {
     pub name: Ident,
     pub fields: Vec<ShaderVar>,
+}
+
+impl ShaderStruct {
+    pub fn std430_align(&self) -> usize {
+        self.fields.iter().map(|f| f.t.std430_align()).sum()
+    }
 }
 
 impl PartialEq for ShaderStruct {
@@ -177,6 +197,28 @@ impl Display for ShaderStruct {
                 .collect::<Vec<String>>()
                 .join("\n")
         )
+    }
+}
+
+impl ToTokens for ShaderStruct {
+    fn to_tokens(&self, tokens: &mut proc_macro2::TokenStream) {
+        let name = format_ident!("{}", self.name.to_string());
+
+        let fields = self.fields.iter().map(|f| {
+            let name = format_ident!("{}", f.name.to_string());
+            let t = &f.t;
+            if f.is_array {
+                quote! {pub #name: Vec<#t>}
+            } else {
+                quote! {pub #name: #t}
+            }
+        });
+
+        tokens.extend(quote! {
+            struct #name {
+                #(#fields),*
+            }
+        });
     }
 }
 

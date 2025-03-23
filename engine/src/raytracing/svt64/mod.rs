@@ -1,4 +1,8 @@
-use renderer::{Renderable, State, buffers::ShaderBuffer};
+/// Code in this module is based on this article:
+/// https://dubiousconst282.github.io/2024/10/03/voxel-ray-tracing/
+use renderer::{Renderable, SSBO, State, buffers::ShaderBuffer};
+use shaders::ComputeProgram;
+use svt64::buffers::{VoxelLeaves, VoxelNodes};
 use tree::generate_tree;
 
 use crate::{Args, tests::test_scene};
@@ -9,8 +13,25 @@ mod tree;
 
 pub struct Svt64Renderer {
     pub screen: Screen,
-    pub node_buffer: ShaderBuffer<svt64::buffers::VoxelNode>,
-    pub leaf_buffer: ShaderBuffer<svt64::buffers::VoxelLeaf>,
+    pub nodes: VoxelNodes,
+    pub leaves: VoxelLeaves,
+    pub node_buffer: ShaderBuffer<svt64::buffers::VoxelNodes>,
+    pub leaf_buffer: ShaderBuffer<svt64::buffers::VoxelLeaves>,
+}
+
+impl Renderable for Svt64Renderer {
+    fn render(&mut self, state: &mut State) {
+        self.screen.pre_render(state);
+
+        let compute = svt64::c_main::get();
+
+        self.node_buffer.bind();
+        self.leaf_buffer.bind();
+
+        compute.dispatch(self.screen.resolution.x, self.screen.resolution.y, 1);
+
+        self.screen.post_render();
+    }
 }
 
 pub fn setup(args: &Args, state: &State) -> Box<dyn Renderable> {
@@ -18,9 +39,21 @@ pub fn setup(args: &Args, state: &State) -> Box<dyn Renderable> {
 
     let voxels = test_scene(args);
 
-    let (node, nodes, leaf_data) = generate_tree(&voxels);
+    let (nodes, leaf_data) = generate_tree(&voxels);
 
-    Box::new(screen)
+    let nodes = VoxelNodes { nodes };
+    let leaves = VoxelLeaves { data: leaf_data };
+
+    let node_buffer = ShaderBuffer::single(&nodes).expect("Failed to make node buffer");
+    let leaf_buffer = ShaderBuffer::single(&leaves).expect("Failed to make leaf buffer");
+
+    Box::new(Svt64Renderer {
+        screen,
+        nodes,
+        leaves,
+        node_buffer,
+        leaf_buffer,
+    })
 }
 
 renderer::compute!(svt64, {
@@ -31,17 +64,21 @@ renderer::compute!(svt64, {
     #bind 0
     uniform image2D img;
 
-    #bind 2
-    buffer VoxelNode {
+    struct Node {
         uint data_offset;
         uint mask_upper;
         uint mask_lower;
-    } nodes[];
+    }
+
+    #bind 2
+    buffer VoxelNodes {
+        Node nodes[];
+    } nodes;
 
     #bind 3
-    buffer VoxelLeaf {
-        uint data;
-    } leaf_data[];
+    buffer VoxelLeaves {
+        uint data[];
+    } leaf_data;
 
     float sphere(vec3 sphere_pos, float radius, vec3 point_pos) {
         return length(point_pos - sphere_pos) - radius;

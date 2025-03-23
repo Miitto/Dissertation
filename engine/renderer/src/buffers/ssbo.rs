@@ -19,8 +19,8 @@ where
     pub fn new(uniforms: &[U]) -> Result<Self, BufferError> {
         // println!("Creating Uniform buffer with size: {}", U::size());
 
-        let count = uniforms.len();
-        let mut buffer = FencedRawBuffer::empty(U::size() * count, BufferMode::Persistent)?;
+        let size = uniforms.iter().map(|u| u.size()).sum::<usize>();
+        let mut buffer = FencedRawBuffer::empty(size, BufferMode::Persistent)?;
 
         if !uniforms.is_empty() {
             let mut mapping = buffer.get_mapping();
@@ -37,14 +37,47 @@ where
         })
     }
 
+    pub fn single(uniform: &U) -> Result<Self, BufferError> {
+        let mut buffer = FencedRawBuffer::empty(uniform.size(), BufferMode::Persistent)?;
+
+        {
+            let mut mapping = buffer.get_mapping();
+            uniform.set_buffer_data(&mut mapping, 0)?;
+        }
+
+        Ok(Self {
+            buffer,
+            phantom: PhantomData,
+        })
+    }
+
     pub fn id(&self) -> u32 {
         self.buffer.id()
     }
 
+    pub fn set_single(&mut self, uniform: &U, offset: usize) -> Result<(), BufferError> {
+        let size = uniform.size();
+        if size + offset > self.buffer.size() {
+            let buffer = FencedRawBuffer::empty(size + offset, BufferMode::Persistent)
+                .expect("Failed to make larger ShaderBuffer");
+            if offset != 0 {
+                if let Err(e) = self.buffer.copy_to(&buffer, 0, 0, offset) {
+                    eprintln!("Error copying over old data: {:?}", e);
+                }
+            }
+
+            self.buffer = buffer;
+        }
+
+        let mut mapping = self.buffer.get_mapping();
+        uniform.set_buffer_data(&mut mapping, offset)?;
+
+        Ok(())
+    }
+
     pub fn set_data(&mut self, data: &[U], mut offset: usize) -> Result<usize, BufferError> {
         crate::profiler::event!("Setting SSBO data");
-        let count = data.len();
-        let size = U::size() * count;
+        let size = data.iter().map(|u| u.size()).sum::<usize>();
 
         let total_size = size + offset;
 

@@ -92,6 +92,18 @@ pub struct Screen {
     resolution_buffer: ShaderBuffer<raymarching::uses::ray::uniforms::iResolution>,
 }
 
+impl Screen {
+    pub fn pre_render(&mut self, state: &State) {
+        self.check_resolution(state);
+        self.resolution_buffer.bind();
+    }
+
+    pub fn post_render(&mut self) {
+        self.framebuffer
+            .blit_to_screen(self.resolution.x as i32, self.resolution.y as i32);
+    }
+}
+
 impl Renderable for Screen {
     fn render(&mut self, state: &mut renderer::State) {
         self.check_resolution(state);

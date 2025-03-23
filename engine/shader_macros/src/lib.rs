@@ -81,6 +81,8 @@ pub fn program(input: TokenStream) -> TokenStream {
 
     let uses = build_rust::uses(&input.content);
 
+    let structs = build_rust::struct_defs(&input.content);
+
     let name = format_ident!("{}", input.meta.name.to_string());
 
     let includes = input.content.includes;
@@ -88,12 +90,14 @@ pub fn program(input: TokenStream) -> TokenStream {
     quote! {
         pub mod #name {
             #(const _: &str = include_str!(#includes);)*
+            #structs
 
             #vertex_struct
 
             #uniform_struct
 
             #program_impl
+
 
             #uses
         }
@@ -141,12 +145,15 @@ pub fn snippet(input: TokenStream) -> TokenStream {
         content: info,
     };
 
+    let structs = build_rust::struct_defs(&input.content);
     let uniform_struct = build_rust::uniform_struct(&input, use_crate);
 
     let source = build_glsl::no_main(&input);
 
     quote! {
         pub mod #name {
+            #structs
+
             #uniform_struct
 
             pub const SOURCE: &'static str = #source;
@@ -212,6 +219,7 @@ pub fn compute(input: TokenStream) -> TokenStream {
         })
         .collect::<Vec<_>>();
 
+    let structs = build_rust::struct_defs(&input.content);
     let uses = build_rust::uses(&input.content);
     let includes = &input.content.includes;
     let uniform_struct = build_rust::uniform_struct(&input, use_crate);
@@ -219,10 +227,12 @@ pub fn compute(input: TokenStream) -> TokenStream {
     quote! {
         pub mod #name {
             #(const _: &str = include_str!(#includes);)*
+            #structs
 
             #(#programs)*
 
             #uniform_struct
+
 
             #uses
         }
