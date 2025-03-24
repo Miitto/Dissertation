@@ -153,7 +153,9 @@ impl CameraManager {
 
         let program = crate::draw::line::Program::get();
 
-        let uniforms = crate::draw::line::Uniforms {};
+        let uniforms = crate::draw::line::Uniforms {
+            model: Some(Mat4::IDENTITY.to_cols_array_2d()),
+        };
 
         if let Err(e) = state.cameras.frustum_mesh.set_vertices(&lines) {
             eprintln!("Error setting vertices: {:?}", e);

@@ -65,10 +65,13 @@ crate::program!(line, {
 
     #snippet crate::camera_matrices;
 
+    uniform mat4 model = mat4(1.0);
+
     v2f vert(vIn i) {
         mat4 pv = camera.projection * camera.inverse_view;
+        mat4 mvp = pv * model;
 
-        gl_Position = pv * vec4(i.pos, 1.0);
+        gl_Position = mvp * vec4(i.pos, 1.0);
 
         v2f o;
         o.color = i.color;
