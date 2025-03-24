@@ -1,5 +1,10 @@
 impl culled_voxel::Vertex {
-    pub fn new(v_pos: [f32; 3]) -> Self {
+    pub fn new(v_pos: [i32; 3]) -> Self {
+        Self { v_pos }
+    }
+}
+impl culled_voxel_combined::Vertex {
+    pub fn new(v_pos: [i32; 3]) -> Self {
         Self { v_pos }
     }
 }
@@ -8,12 +13,13 @@ shaders::program!(culled_voxel, {
     #vertex vert
     #fragment frag
 
-    uniform mat4 projectionMatrix;
-    uniform mat4 viewMatrix;
-    uniform mat4 modelMatrix;
+    uniform ivec3 chunk_position;
+
+    #snippet renderer::camera_matrices
+    #snippet crate::meshing::binary::common::get_pos
 
     struct vIn {
-        vec3 v_pos;
+        ivec3 v_pos;
     }
 
     struct iIn {
@@ -27,75 +33,59 @@ shaders::program!(culled_voxel, {
     v2f vert(vIn v, iIn i) {
         v2f o;
 
-        mat4 vp = projectionMatrix * viewMatrix;
-        mat4 mvp = vp * modelMatrix;
+        mat4 vp = camera.projection * camera.inverse_view;
 
-        float v_x = v.v_pos.x;
-        float v_y = v.v_pos.y;
-        float v_z = v.v_pos.z;
+        PlaneData data = unpack_data(v.v_pos, i.data, chunk_position);
 
-        float in_x = float(i.data >> 10 & 31);
-        float in_y = float((i.data >> 5) & 31);
-        float in_z = float(i.data & 31);
+        gl_Position = vp * vec4(data.position, 1.0);
 
-        uint direction = (i.data >> 15) & 7;
+        o.color = data.color;
 
-        float x;
-        float y;
-        float z;
+        return o;
+    }
 
-        // left right up down forward back
-        switch (direction) {
-            case 0: {
-                x = 0;
-                y = 1-v_x;
-                z = v_z;
-                o.color = vec4(1.0, 0.0, 1.0, 1.0);
-                break;
-            }
-            case 1: {
-                x = 1;
-                y = v_x;
-                z = v_z;
-                o.color = vec4(0.0, 1.0, 1.0, 1.0);
-                break;
-            }
-            case 2: {
-                x = v_x;
-                y = 0;
-                z = v_z;
-                o.color = vec4(1.0, 0.0, 0.0, 1.0);
-                break;
-            }
-            case 3: {
-                x = 1-v_x;
-                y = 1;
-                z = v_z;
-                o.color = vec4(1.0, 1.0, 0.0, 1.0);
-                break;
-            }
-            case 4: {
-                z = 0;
-                x = v_x;
-                y = v_z;
-                o.color = vec4(0.0, 1.0, 0.0, 1.0);
-                break;
-            }
-            case 5: {
-                z = 1;
-                x = 1-v_x;
-                y = v_z;
-                o.color = vec4(0.0, 0.0, 1.0, 1.0);
-                break;
-            }
-        }
+    vec4 frag(v2f i) {
+        return i.color;
+    }
+});
 
-        float o_x = x + in_x;
-        float o_y = y + in_y;
-        float o_z = z + in_z;
+shaders::program!(culled_voxel_combined, {
+    #vertex vert
+    #fragment frag
 
-        gl_Position = mvp * vec4(o_x, o_y, o_z, 1.0);
+    #bind 1
+    buffer ChunkData {
+        ivec3 pos[];
+    } chunk_positions;
 
+    #snippet renderer::camera_matrices
+    #snippet crate::meshing::binary::common::get_pos
+
+    struct vIn {
+        ivec3 v_pos;
+    }
+
+    struct iIn {
+        uint data;
+    }
+
+    struct v2f {
+        vec4 color;
+    }
+
+    v2f vert(vIn v, iIn i) {
+        v2f o;
+
+        mat4 vp = camera.projection * camera.inverse_view;
+
+        ivec3 chunk_pos = chunk_positions.pos[gl_DrawID];
+
+        PlaneData data = unpack_data(v.v_pos, i.data, chunk_pos);
+
+
+        gl_Position = vp * vec4(data.position, 1.0);
+
+        o.color = data.color;
 
         return o;
     }

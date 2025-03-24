@@ -3,7 +3,12 @@ use std::{
     collections::HashMap,
 };
 
-use renderer::Dir;
+use glam::{IVec3, ivec3};
+use renderer::{
+    Dir, DrawMode,
+    bounds::BoundingHeirarchy,
+    mesh::{Mesh, ninstanced::NInstancedMesh},
+};
 
 use crate::{
     common::{BasicVoxel, BlockType, InstanceData, Voxel},
@@ -16,44 +21,96 @@ const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
     voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    instances: RefCell<Option<Vec<culled_voxel::Instance>>>,
+    bounds: BoundingHeirarchy,
+    instances: Vec<culled_voxel::Instance>,
+    mesh: Option<NInstancedMesh<culled_voxel::Vertex, culled_voxel::Instance>>,
     needs_update: bool,
 }
 
 impl Chunk {
-    pub fn set(&mut self, pos: [usize; 3], block_type: BlockType) {
-        *self.instances.borrow_mut() = None;
-        self.voxels[pos[0]][pos[1]][pos[2]].set_type(block_type);
-        self.needs_update = true;
-    }
+    fn new(
+        voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
+        make_mesh: bool,
+        frustum_cull: bool,
+    ) -> Self {
+        let vertices = vec![
+            culled_voxel::Vertex::new([0, 0, 0]),
+            culled_voxel::Vertex::new([1, 0, 0]),
+            culled_voxel::Vertex::new([0, 0, 1]),
+            culled_voxel::Vertex::new([1, 0, 1]),
+        ];
 
-    pub fn fill(block_type: BlockType) -> Self {
-        let voxels =
-            Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+        let mut mesh = if make_mesh {
+            Some(
+                NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
+                    .expect("Failed to make greedy chunk NInstancedMesh"),
+            )
+        } else {
+            None
+        };
+
+        if frustum_cull {
+            if let Some(mesh) = &mut mesh {
+                mesh.enable_frustum_culling();
+            }
+        }
+
         Self {
             voxels,
-            instances: RefCell::new(None),
+            mesh,
+            bounds: BoundingHeirarchy::default(),
+            instances: vec![],
             needs_update: true,
         }
     }
 
-    pub fn flat(height: u8, block_type: BlockType) -> Self {
-        let mut chunk = Self::fill(BlockType::Air);
-
-        for y in 0..height {
-            for x in 0..CHUNK_SIZE {
-                for z in 0..CHUNK_SIZE {
-                    chunk.voxels[x][y as usize][z] = BasicVoxel::new(block_type);
-                }
-            }
+    pub fn get(&self, pos: IVec3) -> BlockType {
+        if pos.x as usize >= CHUNK_SIZE
+            || pos.y as usize >= CHUNK_SIZE
+            || pos.z as usize >= CHUNK_SIZE
+        {
+            eprintln!("Coord: {:?} is outside of chunk", pos);
+            return BlockType::Air;
         }
 
-        chunk
+        self.voxels[pos.x as usize][pos.y as usize][pos.z as usize].get_type()
     }
 
-    pub fn update(&mut self, position: &[i32; 3], chunks: &HashMap<[i32; 3], RefCell<Self>>) {
-        if !self.needs_update {
+    pub fn set(&mut self, pos: IVec3, block_type: BlockType) {
+        if pos.max_element() >= CHUNK_SIZE as i32 || pos.min_element() < 0 {
+            eprintln!("Coord: {:?} is outside of chunk", pos);
             return;
+        }
+
+        self.voxels[pos.x as usize][pos.y as usize][pos.z as usize].set_type(block_type);
+
+        self.invalidate()
+    }
+
+    pub fn fill(block_type: BlockType, make_mesh: bool, frustum_cull: bool) -> Self {
+        let voxels =
+            Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
+        Self::new(voxels, make_mesh, frustum_cull)
+    }
+
+    fn invalidate(&mut self) {
+        self.needs_update = true;
+    }
+
+    pub fn bounds(&self) -> &BoundingHeirarchy {
+        &self.bounds
+    }
+
+    pub fn update_bounds(&mut self, bounds: BoundingHeirarchy) {
+        self.bounds = bounds;
+        if let Some(mesh) = &mut self.mesh {
+            mesh.set_bounds(bounds);
+        }
+    }
+
+    pub fn update(&mut self, position: &IVec3, chunks: &HashMap<IVec3, RefCell<Self>>) -> bool {
+        if !self.needs_update {
+            return false;
         }
 
         let get_fn = |x: isize, y: isize, z: isize| {
@@ -86,11 +143,7 @@ impl Chunk {
                 0
             };
 
-            let chunk_pos = [
-                position[0] + chunk_x_offset,
-                position[1] + chunk_y_offset,
-                position[2] + chunk_z_offset,
-            ];
+            let chunk_pos = position + ivec3(chunk_x_offset, chunk_y_offset, chunk_z_offset);
 
             let chunk = if let Some(chunk) = chunks.get(&chunk_pos) {
                 chunk
@@ -125,35 +178,44 @@ impl Chunk {
 
         let culled = make_culled_faces(get_fn);
 
-        let mut instances = vec![];
+        self.instances.clear();
 
         for dir in Dir::all() {
-            for x in 0..CHUNK_SIZE {
-                for y in 0..CHUNK_SIZE {
-                    for z in 0..CHUNK_SIZE {
-                        let col = culled[usize::from(dir)][z][x];
+            for face in culled[usize::from(dir)].iter() {
+                let data = InstanceData::new(
+                    face.x,
+                    face.y,
+                    face.z,
+                    dir,
+                    face.width,
+                    face.height,
+                    face.block_type,
+                )
+                .rotate_on_dir();
 
-                        let solid = (col >> y) & 1 == 1;
+                self.instances
+                    .push(culled_voxel::Instance { data: data.into() });
+            }
+        }
 
-                        if !solid {
-                            continue;
-                        }
-                        let pos = InstanceData::new(
-                            x as u8,
-                            y as u8,
-                            z as u8,
-                            dir,
-                            1,
-                            1,
-                            self.voxels[x][y][z].get_type(),
-                        )
-                        .rotate_on_dir();
-                        instances.push(culled_voxel::Instance { data: pos.into() });
-                    }
-                }
+        if let Some(mesh) = &mut self.mesh {
+            if let Err(e) = mesh.set_instances(self.instances.as_slice()) {
+                eprintln!("Error: {:?}", e);
             }
         }
 
         self.needs_update = false;
+
+        true
+    }
+
+    pub fn mesh(
+        &mut self,
+    ) -> Option<&mut NInstancedMesh<culled_voxel::Vertex, culled_voxel::Instance>> {
+        self.mesh.as_mut()
+    }
+
+    pub fn instances(&self) -> &[culled_voxel::Instance] {
+        &self.instances
     }
 }

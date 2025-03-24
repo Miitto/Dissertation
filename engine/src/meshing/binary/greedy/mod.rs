@@ -172,10 +172,11 @@ impl ChunkManager {
     pub fn get_block_at(&self, pos: &IVec3) -> BlockType {
         let (chunk_pos, in_chunk_pos) = seperate_global_pos(pos);
 
-        let chunk = self
-            .chunks
-            .get(&chunk_pos)
-            .expect("Looking at chunk that doesn't exist?");
+        let chunk = if let Some(chunk) = self.chunks.get(&chunk_pos) {
+            chunk
+        } else {
+            return BlockType::Air;
+        };
 
         chunk.borrow().get(in_chunk_pos)
     }
@@ -358,12 +359,9 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
         state.draw(&mut manager.outline_mesh, &program, &uniforms);
 
         if state.is_clicked(winit::event::MouseButton::Left) {
-            let chunk = manager
-                .chunks
-                .get_mut(&chunk_pos)
-                .expect("Looking at chunk that doesn't exist?");
-
-            chunk.borrow_mut().set(in_chunk_pos, BlockType::Air);
+            if let Some(chunk) = manager.chunks.get_mut(&chunk_pos) {
+                chunk.borrow_mut().set(in_chunk_pos, BlockType::Air);
+            }
         }
     }
 }

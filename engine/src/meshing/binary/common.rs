@@ -24,13 +24,15 @@ pub struct GreedyFace {
     pub block_type: BlockType,
 }
 
-pub fn make_culled_faces<F>(get_fn: F) -> TransformedDepths
+pub fn make_culled_faces<F>(get_fn: F) -> Vec<Vec<GreedyFace>>
 where
     F: Fn(isize, isize, isize) -> BlockType,
 {
-    let depths = build_depths(get_fn);
+    let depths = build_depths(&get_fn);
     let culled = cull_depths(depths);
-    depths_to_faces(culled)
+    let block_faces = depths_to_faces(culled, get_fn);
+
+    culled_faces(block_faces)
 }
 
 pub fn make_greedy_faces<F>(get_fn: F) -> GreedyFaces
@@ -140,8 +142,18 @@ pub fn cull_depths(depths: AxisDepths) -> FaceDepths {
 }
 
 /// Transform depth from going along the integer, to the horizonal axis (X-Z) going along the integer.
-pub fn depths_to_faces(depths: FaceDepths) -> TransformedDepths {
-    let mut faces = Box::new([[[0; CHUNK_SIZE]; CHUNK_SIZE]; 6]);
+pub fn depths_to_faces<F>(depths: FaceDepths, get_fn: F) -> TransformedBlockDepths
+where
+    F: Fn(isize, isize, isize) -> BlockType,
+{
+    let mut faces: TransformedBlockDepths = [
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+        HashMap::new(),
+    ];
 
     for dir in Dir::all() {
         for z in 0..CHUNK_SIZE {
@@ -160,13 +172,78 @@ pub fn depths_to_faces(depths: FaceDepths) -> TransformedDepths {
                     // so we can get the next
                     col &= col - 1;
 
-                    faces[usize::from(dir)][y][x] |= 1 << z;
+                    let pos = match dir {
+                        Dir::Up | Dir::Down => ivec3(x as i32, y as i32, z as i32),
+                        Dir::Left | Dir::Right => ivec3(y as i32, z as i32, x as i32),
+                        Dir::Forward | Dir::Backward => ivec3(x as i32, z as i32, y as i32),
+                    };
+
+                    let block_type = get_fn(pos.x as isize, pos.y as isize, pos.z as isize);
+
+                    let data = faces[usize::from(dir)].entry(block_type).or_default();
+                    data[y][x] |= 1 << z;
                 }
             }
         }
     }
 
     faces
+}
+
+pub fn culled_faces(depths: TransformedBlockDepths) -> Vec<Vec<GreedyFace>> {
+    let mut culled = vec![vec![], vec![], vec![], vec![], vec![], vec![]];
+
+    for dir in Dir::all() {
+        let face = &mut culled[usize::from(dir)];
+        for (block_type, dir_depth) in depths[usize::from(dir)].iter() {
+            for depth in 0..CHUNK_SIZE {
+                let faces = culled_face(&dir_depth[depth], depth as u8, &block_type);
+                face.extend(faces);
+            }
+        }
+    }
+
+    culled
+}
+
+pub fn culled_face(face: &[u32; 32], depth: u8, block_type: &BlockType) -> Vec<GreedyFace> {
+    let mut quads = vec![];
+
+    const CS: u32 = CHUNK_SIZE as u32;
+
+    (0..face.len()).for_each(|row| {
+        let line = face[row] as u64;
+        if line == 0 {
+            return;
+        }
+
+        let mut y = 0u32;
+
+        while y < CS {
+            y += (face[row] >> y).trailing_zeros();
+
+            if y > CS {
+                continue;
+            }
+
+            let h = (line >> y).trailing_ones();
+
+            for h in 0..h {
+                quads.push(GreedyFace {
+                    x: row as u8,
+                    y: (y + h) as u8,
+                    z: depth,
+                    width: 0,
+                    height: 0,
+                    block_type: *block_type,
+                });
+            }
+
+            y += h;
+        }
+    });
+
+    quads
 }
 
 pub fn depths_to_block_faces<F>(depths: FaceDepths, get_fn: F) -> TransformedBlockDepths
