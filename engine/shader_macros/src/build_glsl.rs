@@ -385,7 +385,7 @@ pub fn no_main(ProgramInput { content, .. }: &ProgramInput) -> String {
 pub fn compute(info: &ComputeInfo, ProgramInput { content, .. }: &ProgramInput) -> String {
     let structs = get_structs(content);
     let uniforms = get_uniforms(content);
-    let buffers = get_structs(content);
+    let buffers = get_buffers(content);
     let functions = get_functions(content);
 
     let main = info.function.to_string();

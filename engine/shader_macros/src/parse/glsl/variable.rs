@@ -1,7 +1,8 @@
-use proc_macro::{Diagnostic, Level, TokenTree};
+use proc_macro::{Diagnostic, Ident, Level, Span, TokenTree};
 
 use crate::Result;
 use crate::parse::{delimited, ident_any};
+use crate::shader_var::ShaderStruct;
 
 use crate::{shader_info::ShaderInfo, shader_var::ShaderVar};
 
@@ -50,10 +51,16 @@ pub fn parse_var<'a>(
 
         Ok((input, var))
     } else {
-        Err(Some(Diagnostic::spanned(
-            type_name.span(),
-            Level::Error,
-            "Unknown type",
-        )))
+        let var = ShaderVar {
+            name: name.clone(),
+            t: crate::shader_var::ShaderType::Struct(ShaderStruct {
+                name: type_name.clone(),
+                fields: vec![],
+            }),
+            type_span: None,
+            is_array: false,
+        };
+
+        Ok((input, var))
     }
 }

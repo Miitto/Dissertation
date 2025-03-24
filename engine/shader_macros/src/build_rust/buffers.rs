@@ -45,7 +45,7 @@ pub fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
                             }}
                         } else {
                         quote! {
-                            let val = self.#f_name;
+                            let val = &self.#f_name;
                             let align = attr_type_of_val(&self.#f_name).std430_align();
                             #set
                         }}
@@ -53,10 +53,10 @@ pub fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
                     ShaderType::Struct(s) => {
                         let setters = s.fields.iter().map(|s| {
                             let s_name = format_ident!("{}", s.name.to_string());
-                            let name = if f.is_array { quote! {item}} else {quote! {self.#f_name.#s_name}};
+                            let name = if f.is_array { quote! {item.#s_name}} else {quote! {self.#f_name.#s_name}};
                             let align = if f.is_array { quote! {attr_type_of_val(&item.#s_name).std430_align()}} else {quote! {attr_type_of_val(&self.#f_name.#s_name).std430_align()}};
                                quote! {
-                                    let val = #name;
+                                    let val = &#name;
                                     let align = #align;
                                     #set
                                }
@@ -66,6 +66,7 @@ pub fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
                         if f.is_array {
                             quote! {
                                 for item in &self.#f_name {
+                                    let val = item;
                                     #(#setters)*
                                 }
                             }
@@ -82,12 +83,16 @@ pub fn buffer_structs(input: &ProgramInput, use_crate: bool) -> proc_macro2::Tok
 
             let bind = u.bind;
 
-            let size = if !u.fields.iter().any(|f| f.is_array) {let size = u.fields.iter().map(|f| f.t.std430_align()).sum::<usize>(); quote!{#size}} else {
+            let size = if !u.fields.iter().any(|f| f.is_array) {
+                let size = u.fields.iter().map(|f| f.t.std430_align()).sum::<usize>();
+                quote!{#size}
+            } else {
                 let static_size = u.fields.iter().filter(|f| !f.is_array).map(|f| f.t.std430_align()).sum::<usize>();
 
                 let calc_size = u.fields.iter().filter(|f| f.is_array).map(|f| {
                     let f_name = format_ident!("{}", f.name.to_string());
                     let field_size = f.t.std430_align();
+
                     quote! {
                         let len = self.#f_name.len();
                         size += #field_size * len;
