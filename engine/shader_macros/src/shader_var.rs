@@ -60,6 +60,7 @@ pub enum TextureType {
 fn get_primative(val: &str) -> Option<AttributeType> {
     Some(match val {
         "byte" => AttributeType::I8,
+        "bool" => AttributeType::Bool,
         "int" => AttributeType::I32,
         "uint" => AttributeType::U32,
         "float" => AttributeType::F32,
@@ -71,6 +72,7 @@ fn get_primative(val: &str) -> Option<AttributeType> {
         "ivec3" => AttributeType::I32I32I32,
         "ivec4" => AttributeType::I32I32I32I32,
         "uvec2" => AttributeType::U32U32,
+        "uvec3" => AttributeType::U32U32U32,
         _ => return None,
     })
 }
@@ -109,6 +111,7 @@ impl Display for ShaderType {
                     "{}",
                     match t {
                         I8 => "byte",
+                        Bool => "bool",
                         I32 => "int",
                         U32 => "uint",
                         F32 => "float",
@@ -121,6 +124,7 @@ impl Display for ShaderType {
                         I32I32I32I32 => "ivec4",
                         F32x4x4 => "mat4",
                         U32U32 => "uvec2",
+                        U32U32U32 => "uvec3",
                         _ => todo!("Convert {:?} to GLSL", t),
                     }
                 )

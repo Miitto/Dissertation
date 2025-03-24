@@ -36,7 +36,13 @@ impl<'a, B: RawBuffer> Mapping<'a, B> {
     /// # Safety
     /// src must be a valid pointer for the length of size
     pub unsafe fn write(&mut self, src: *const u8, size: usize, offset: usize) {
-        assert!(size + offset <= self.size);
+        assert!(
+            size + offset <= self.size,
+            "{} + {} <= {}",
+            size,
+            offset,
+            self.size
+        );
 
         unsafe { std::ptr::copy_nonoverlapping(src, self.ptr.add(offset) as *mut u8, size) }
 
