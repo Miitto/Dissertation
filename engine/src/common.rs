@@ -1,4 +1,25 @@
-use renderer::Dir;
+use glam::{IVec3, Vec3, ivec3, vec3};
+use renderer::{Dir, camera::Camera};
+
+pub fn seperate_global_pos(pos: &IVec3) -> (IVec3, IVec3) {
+    let mut chunk_pos = pos / 32;
+    let mut in_chunk_pos = pos.abs() % 32;
+
+    if pos.x < 0 {
+        chunk_pos.x -= 1;
+        in_chunk_pos.x = 31 - in_chunk_pos.x;
+    }
+    if pos.y < 0 {
+        chunk_pos.y -= 1;
+        in_chunk_pos.y = 31 - in_chunk_pos.y;
+    }
+    if pos.z < 0 {
+        chunk_pos.z -= 1;
+        in_chunk_pos.z = 31 - in_chunk_pos.z;
+    }
+
+    (chunk_pos, in_chunk_pos)
+}
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct InstanceData(u32);
@@ -187,4 +208,126 @@ impl std::fmt::Display for InstanceData {
             self.0
         )
     }
+}
+
+pub fn get_looked_at_block(
+    camera: &dyn Camera,
+    get_block_fn: impl Fn(&IVec3) -> BlockType,
+) -> Option<IVec3> {
+    renderer::profiler::event!("Greedy Get Looked At Block");
+
+    //http://www.cse.yorku.ca/~amana/research/grid.pdf
+    let forward = camera.forward();
+
+    let mut current = camera.transform().position;
+    let end = current + (forward * 6.0);
+
+    let delta = vec3(
+        (end.x - current.x).abs(),
+        (end.y - current.y).abs(),
+        (end.z - current.z).abs(),
+    );
+
+    let step = vec3(forward.x.signum(), forward.y.signum(), forward.z.signum());
+
+    let hypotenuse = (delta.x.powi(2) + delta.y.powi(2) + delta.z.powi(2)).sqrt();
+    let hypotenuse_half = hypotenuse / 2.0;
+
+    let mut t_max = vec3(
+        hypotenuse_half / delta.x,
+        hypotenuse_half / delta.y,
+        hypotenuse_half / delta.z,
+    );
+
+    let t_delta = vec3(
+        hypotenuse / delta.x,
+        hypotenuse / delta.y,
+        hypotenuse / delta.z,
+    );
+
+    macro_rules! inc_x {
+        () => {
+            t_max.x += t_delta.x;
+            current.x += step.x;
+        };
+    }
+
+    macro_rules! inc_y {
+        () => {
+            t_max.y += t_delta.y;
+            current.y += step.y;
+        };
+    }
+
+    macro_rules! inc_z {
+        () => {
+            t_max.z += t_delta.z;
+            current.z += step.z;
+        };
+    }
+
+    let compare = |current: &Vec3, end: &Vec3| {
+        let x = if step.x < 0.0 {
+            current.x >= end.x
+        } else {
+            current.x <= end.x
+        };
+
+        let y = if step.y < 0.0 {
+            current.y >= end.y
+        } else {
+            current.y <= end.y
+        };
+
+        let z = if step.z < 0.0 {
+            current.z >= end.z
+        } else {
+            current.z <= end.z
+        };
+
+        x && y && z
+    };
+
+    while compare(&current, &end) {
+        if t_max.x < t_max.y {
+            if t_max.x < t_max.z {
+                inc_x!();
+            } else if t_max.x > t_max.z {
+                inc_z!();
+            } else {
+                inc_x!();
+                inc_z!();
+            }
+        } else if t_max.x > t_max.y {
+            if t_max.y < t_max.z {
+                inc_y!();
+            } else if t_max.y > t_max.z {
+                inc_z!();
+            } else {
+                inc_y!();
+                inc_z!();
+            }
+        } else if t_max.y < t_max.z {
+            inc_x!();
+            inc_y!();
+        } else if t_max.y > t_max.z {
+            inc_z!();
+        } else {
+            inc_x!();
+            inc_y!();
+            inc_z!();
+        }
+
+        let pos = ivec3(
+            current.x.floor() as i32,
+            current.y.floor() as i32,
+            current.z.floor() as i32,
+        );
+
+        if get_block_fn(&pos).is_solid() {
+            return Some(pos);
+        }
+    }
+
+    None
 }

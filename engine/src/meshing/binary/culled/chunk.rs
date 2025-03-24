@@ -138,7 +138,6 @@ impl Chunk {
                         if !solid {
                             continue;
                         }
-
                         let pos = InstanceData::new(
                             x as u8,
                             y as u8,

@@ -27,7 +27,8 @@ pub enum Test {
 }
 
 pub fn test_scene(args: &Args) -> HashMap<IVec3, BlockType> {
-    match args.scene {
+    println!("Creating test scene");
+    let scene = match args.scene {
         Scene::Single => {
             let mut map = HashMap::new();
             map.insert(ivec3(0, 0, 0), BlockType::Grass);
@@ -104,5 +105,8 @@ pub fn test_scene(args: &Args) -> HashMap<IVec3, BlockType> {
 
             blocks
         }
-    }
+    };
+
+    println!("Finished generating scsene");
+    scene
 }

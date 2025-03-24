@@ -17,30 +17,14 @@ use voxel::{
     greedy_voxel_combined::{self, buffers::ChunkData},
 };
 
-use crate::{Args, common::BlockType, tests::test_scene};
+use crate::{
+    Args,
+    common::{BlockType, get_looked_at_block, seperate_global_pos},
+    tests::test_scene,
+};
 
 mod chunk;
 mod voxel;
-
-fn seperate_global_pos(pos: IVec3) -> (IVec3, IVec3) {
-    let mut chunk_pos = pos / 32;
-    let mut in_chunk_pos = pos.abs() % 32;
-
-    if pos.x < 0 {
-        chunk_pos.x -= 1;
-        in_chunk_pos.x = 31 - in_chunk_pos.x;
-    }
-    if pos.y < 0 {
-        chunk_pos.y -= 1;
-        in_chunk_pos.y = 31 - in_chunk_pos.y;
-    }
-    if pos.z < 0 {
-        chunk_pos.z -= 1;
-        in_chunk_pos.z = 31 - in_chunk_pos.z;
-    }
-
-    (chunk_pos, in_chunk_pos)
-}
 
 pub fn setup(args: &Args, _state: &State) -> ChunkManager {
     let mut manager = ChunkManager::new(args.combine, args.frustum_cull);
@@ -48,7 +32,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
     let data = test_scene(args);
 
     for (pos, block) in data {
-        let (chunk_pos, in_chunk_pos) = seperate_global_pos(pos);
+        let (chunk_pos, in_chunk_pos) = seperate_global_pos(&pos);
 
         let chunk = manager
             .chunks
@@ -64,10 +48,7 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
 
     let instance_data = setup_chunks(&manager.chunks, manager.combined.as_mut());
 
-    dbg!(instance_data.len());
-
     if let Some(combined) = &mut manager.combined {
-        println!("Setting instance data");
         if let Err(e) = combined.mesh.set_instances(&instance_data) {
             eprintln!("Failed to set combined greedy instances: {:?}", e);
         }
@@ -186,6 +167,17 @@ impl ChunkManager {
             outline_mesh,
             frustum_cull,
         }
+    }
+
+    pub fn get_block_at(&self, pos: &IVec3) -> BlockType {
+        let (chunk_pos, in_chunk_pos) = seperate_global_pos(pos);
+
+        let chunk = self
+            .chunks
+            .get(&chunk_pos)
+            .expect("Looking at chunk that doesn't exist?");
+
+        chunk.borrow().get(in_chunk_pos)
     }
 }
 
@@ -324,7 +316,11 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
 
     draw_combined(len);
 
-    if let Some((chunk_pos, in_chunk_pos)) = get_looked_at_block(state.cameras.active(), manager) {
+    if let Some(global_pos) = get_looked_at_block(state.cameras.active(), |pos: &IVec3| {
+        manager.get_block_at(pos)
+    }) {
+        let (chunk_pos, in_chunk_pos) = seperate_global_pos(&global_pos);
+
         let mut pos = (vec3(
             chunk_pos[0] as f32,
             chunk_pos[1] as f32,
@@ -370,127 +366,4 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
             chunk.borrow_mut().set(in_chunk_pos, BlockType::Air);
         }
     }
-}
-
-fn get_looked_at_block(camera: &dyn Camera, manager: &mut ChunkManager) -> Option<(IVec3, IVec3)> {
-    renderer::profiler::event!("Greedy Get Looked At Block");
-
-    //http://www.cse.yorku.ca/~amana/research/grid.pdf
-    let forward = camera.forward();
-
-    let mut current = camera.transform().position;
-    let end = current + (forward * 6.0);
-
-    let delta = vec3(
-        (end.x - current.x).abs(),
-        (end.y - current.y).abs(),
-        (end.z - current.z).abs(),
-    );
-
-    let step = vec3(forward.x.signum(), forward.y.signum(), forward.z.signum());
-
-    let hypotenuse = (delta.x.powi(2) + delta.y.powi(2) + delta.z.powi(2)).sqrt();
-    let hypotenuse_half = hypotenuse / 2.0;
-
-    let mut t_max = vec3(
-        hypotenuse_half / delta.x,
-        hypotenuse_half / delta.y,
-        hypotenuse_half / delta.z,
-    );
-
-    let t_delta = vec3(
-        hypotenuse / delta.x,
-        hypotenuse / delta.y,
-        hypotenuse / delta.z,
-    );
-
-    macro_rules! inc_x {
-        () => {
-            t_max.x += t_delta.x;
-            current.x += step.x;
-        };
-    }
-
-    macro_rules! inc_y {
-        () => {
-            t_max.y += t_delta.y;
-            current.y += step.y;
-        };
-    }
-
-    macro_rules! inc_z {
-        () => {
-            t_max.z += t_delta.z;
-            current.z += step.z;
-        };
-    }
-
-    let compare = |current: &Vec3, end: &Vec3| {
-        let x = if step.x < 0.0 {
-            current.x >= end.x
-        } else {
-            current.x <= end.x
-        };
-
-        let y = if step.y < 0.0 {
-            current.y >= end.y
-        } else {
-            current.y <= end.y
-        };
-
-        let z = if step.z < 0.0 {
-            current.z >= end.z
-        } else {
-            current.z <= end.z
-        };
-
-        x && y && z
-    };
-
-    while compare(&current, &end) {
-        if t_max.x < t_max.y {
-            if t_max.x < t_max.z {
-                inc_x!();
-            } else if t_max.x > t_max.z {
-                inc_z!();
-            } else {
-                inc_x!();
-                inc_z!();
-            }
-        } else if t_max.x > t_max.y {
-            if t_max.y < t_max.z {
-                inc_y!();
-            } else if t_max.y > t_max.z {
-                inc_z!();
-            } else {
-                inc_y!();
-                inc_z!();
-            }
-        } else if t_max.y < t_max.z {
-            inc_x!();
-            inc_y!();
-        } else if t_max.y > t_max.z {
-            inc_z!();
-        } else {
-            inc_x!();
-            inc_y!();
-            inc_z!();
-        }
-
-        let (chunk_pos, in_chunk_pos) = seperate_global_pos(ivec3(
-            current.x.floor() as i32,
-            current.y.floor() as i32,
-            current.z.floor() as i32,
-        ));
-
-        if let Some(chunk) = manager.chunks.get(&chunk_pos) {
-            let block = chunk.borrow().get(in_chunk_pos);
-
-            if block.is_solid() {
-                return Some((chunk_pos, in_chunk_pos));
-            }
-        }
-    }
-
-    None
 }
