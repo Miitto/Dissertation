@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use bracket_noise::prelude::{FastNoise, FractalType, NoiseType};
+use glam::{IVec3, ivec3};
 
 use crate::{Args, common::BlockType};
 
@@ -25,11 +26,11 @@ pub enum Test {
     Svt64,
 }
 
-pub fn test_scene(args: &Args) -> HashMap<[i32; 3], BlockType> {
+pub fn test_scene(args: &Args) -> HashMap<IVec3, BlockType> {
     match args.scene {
         Scene::Single => {
             let mut map = HashMap::new();
-            map.insert([0, 0, 0], BlockType::Grass);
+            map.insert(ivec3(0, 0, 0), BlockType::Grass);
             map
         }
         Scene::Cube => {
@@ -37,7 +38,7 @@ pub fn test_scene(args: &Args) -> HashMap<[i32; 3], BlockType> {
             (0..32).for_each(|x| {
                 (0..32).for_each(|y| {
                     (0..32).for_each(|z| {
-                        map.insert([x, y, z], BlockType::Grass);
+                        map.insert(ivec3(x, y, z), BlockType::Grass);
                     })
                 })
             });
@@ -58,7 +59,7 @@ pub fn test_scene(args: &Args) -> HashMap<[i32; 3], BlockType> {
                         } else {
                             BlockType::Stone
                         };
-                        map.insert([x, y, z], block);
+                        map.insert(ivec3(x, y, z), block);
                     })
                 })
             });
@@ -96,7 +97,7 @@ pub fn test_scene(args: &Args) -> HashMap<[i32; 3], BlockType> {
                             BlockType::Stone
                         };
 
-                        blocks.insert([x, y, z], block_type);
+                        blocks.insert(ivec3(x, y, z), block_type);
                     }
                 }
             }

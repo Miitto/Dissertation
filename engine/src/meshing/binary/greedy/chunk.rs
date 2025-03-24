@@ -1,5 +1,6 @@
 use std::{cell::RefCell, collections::HashMap};
 
+use glam::{IVec3, ivec3};
 use renderer::{
     Dir, DrawMode,
     bounds::BoundingHeirarchy,
@@ -60,13 +61,25 @@ impl Chunk {
         }
     }
 
-    pub fn set(&mut self, pos: [usize; 3], block_type: BlockType) {
-        if pos[0] >= CHUNK_SIZE || pos[1] >= CHUNK_SIZE || pos[2] >= CHUNK_SIZE {
+    pub fn get(&self, pos: IVec3) -> BlockType {
+        if pos.x as usize >= CHUNK_SIZE
+            || pos.y as usize >= CHUNK_SIZE
+            || pos.z as usize >= CHUNK_SIZE
+        {
+            eprintln!("Coord: {:?} is outside of chunk", pos);
+            return BlockType::Air;
+        }
+
+        self.voxels[pos.x as usize][pos.y as usize][pos.z as usize].get_type()
+    }
+
+    pub fn set(&mut self, pos: IVec3, block_type: BlockType) {
+        if pos.max_element() >= CHUNK_SIZE as i32 || pos.min_element() < 0 {
             eprintln!("Coord: {:?} is outside of chunk", pos);
             return;
         }
 
-        self.voxels[pos[0]][pos[1]][pos[2]].set_type(block_type);
+        self.voxels[pos.x as usize][pos.y as usize][pos.z as usize].set_type(block_type);
 
         self.invalidate()
     }
@@ -92,9 +105,9 @@ impl Chunk {
         }
     }
 
-    pub fn update(&mut self, position: &[i32; 3], chunks: &HashMap<[i32; 3], RefCell<Self>>) {
+    pub fn update(&mut self, position: &IVec3, chunks: &HashMap<IVec3, RefCell<Self>>) -> bool {
         if !self.needs_update {
-            return;
+            return false;
         }
 
         let get_fn = |x: isize, y: isize, z: isize| {
@@ -127,11 +140,7 @@ impl Chunk {
                 0
             };
 
-            let chunk_pos = [
-                position[0] + chunk_x_offset,
-                position[1] + chunk_y_offset,
-                position[2] + chunk_z_offset,
-            ];
+            let chunk_pos = position + ivec3(chunk_x_offset, chunk_y_offset, chunk_z_offset);
 
             let chunk = if let Some(chunk) = chunks.get(&chunk_pos) {
                 chunk
@@ -193,6 +202,8 @@ impl Chunk {
         }
 
         self.needs_update = false;
+
+        true
     }
 
     pub fn mesh(

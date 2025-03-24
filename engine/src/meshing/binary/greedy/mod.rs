@@ -2,14 +2,15 @@ use shaders::Program;
 use std::{cell::RefCell, collections::HashMap};
 
 use chunk::Chunk;
-use glam::{ivec3, vec3};
+use glam::{IVec3, Mat4, Vec3, ivec3, vec3};
 use renderer::{
     DrawMode, Renderable, SSBO, State,
     bounds::{BoundingHeirarchy, BoundingVolume},
     buffers::{Buffer, BufferMode, GpuBuffer, ShaderBuffer},
-    camera::frustum::Frustum,
+    camera::{Camera, frustum::Frustum},
+    draw::line::Line,
     indirect::DrawArraysIndirectCommand,
-    mesh::{Mesh, ninstanced::NInstancedMesh},
+    mesh::{Mesh, basic::BasicMesh, ninstanced::NInstancedMesh},
 };
 use voxel::{
     greedy_voxel,
@@ -21,77 +22,47 @@ use crate::{Args, common::BlockType, tests::test_scene};
 mod chunk;
 mod voxel;
 
+fn seperate_global_pos(pos: IVec3) -> (IVec3, IVec3) {
+    let mut chunk_pos = pos / 32;
+    let mut in_chunk_pos = pos.abs() % 32;
+
+    if pos.x < 0 {
+        chunk_pos.x -= 1;
+        in_chunk_pos.x = 31 - in_chunk_pos.x;
+    }
+    if pos.y < 0 {
+        chunk_pos.y -= 1;
+        in_chunk_pos.y = 31 - in_chunk_pos.y;
+    }
+    if pos.z < 0 {
+        chunk_pos.z -= 1;
+        in_chunk_pos.z = 31 - in_chunk_pos.z;
+    }
+
+    (chunk_pos, in_chunk_pos)
+}
+
 pub fn setup(args: &Args, _state: &State) -> ChunkManager {
     let mut manager = ChunkManager::new(args.combine, args.frustum_cull);
 
     let data = test_scene(args);
 
     for (pos, block) in data {
-        let mut chunk_pos = [pos[0] / 32, pos[1] / 32, pos[2] / 32];
-
-        if pos[0] < 0 {
-            chunk_pos[0] -= 1;
-        }
-
-        if pos[1] < 0 {
-            chunk_pos[1] -= 1;
-        }
-
-        if pos[2] < 0 {
-            chunk_pos[2] -= 1;
-        }
+        let (chunk_pos, in_chunk_pos) = seperate_global_pos(pos);
 
         let chunk = manager
             .chunks
             .entry(chunk_pos)
-            .or_insert_with(|| RefCell::new(Chunk::fill(BlockType::Air, !args.combine, true)));
+            .or_insert(RefCell::new(Chunk::fill(
+                BlockType::Air,
+                !args.combine,
+                args.frustum_cull,
+            )));
 
-        let mut chunk_x = pos[0].abs() % 32;
-        let mut chunk_y = pos[1].abs() % 32;
-        let mut chunk_z = pos[2].abs() % 32;
-
-        if pos[0] < 0 {
-            chunk_x = 31 - chunk_x;
-        }
-
-        if pos[1] < 0 {
-            chunk_y = 31 - chunk_y;
-        }
-
-        if pos[2] < 0 {
-            chunk_z = 31 - chunk_z;
-        }
-
-        let pos = [(chunk_x) as usize, (chunk_y) as usize, (chunk_z) as usize];
-
-        chunk.borrow_mut().set(pos, block);
+        chunk.borrow_mut().set(in_chunk_pos, block);
     }
 
-    let mut instance_data: Vec<greedy_voxel_combined::Instance> = vec![];
-
-    for (position, chunk) in manager.chunks.iter() {
-        let pos = vec3(position[0] as f32, position[1] as f32, position[2] as f32) * 32.0;
-        let end_pos = pos + 32.0;
-
-        chunk.borrow_mut().update(position, &manager.chunks);
-        chunk
-            .borrow_mut()
-            .update_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
-
-        if let Some(combined) = &mut manager.combined {
-            let order = &mut combined.pos_order;
-
-            let borrow = chunk.borrow();
-            let instances = borrow.instances();
-
-            instance_data.extend(
-                instances
-                    .iter()
-                    .map(|i| greedy_voxel_combined::Instance { data: i.data }),
-            );
-            order.push((*position, instances.len()));
-        }
-    }
+    let instance_data = setup_chunks(&manager.chunks, manager.combined.as_mut());
 
     dbg!(instance_data.len());
 
@@ -106,15 +77,53 @@ pub fn setup(args: &Args, _state: &State) -> ChunkManager {
     manager
 }
 
+fn setup_chunks(
+    chunks: &HashMap<IVec3, RefCell<Chunk>>,
+    mut combined: Option<&mut CombinedInstanceData>,
+) -> Vec<greedy_voxel_combined::Instance> {
+    let mut instance_data: Vec<greedy_voxel_combined::Instance> = vec![];
+
+    if let Some(c) = combined.as_mut() {
+        c.pos_order.clear()
+    }
+
+    for (position, chunk) in chunks.iter() {
+        let pos = vec3(position[0] as f32, position[1] as f32, position[2] as f32) * 32.0;
+        let end_pos = pos + 32.0;
+
+        chunk.borrow_mut().update(position, chunks);
+        chunk
+            .borrow_mut()
+            .update_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
+
+        if let Some(combined) = &mut combined {
+            let order = &mut combined.pos_order;
+
+            let borrow = chunk.borrow();
+            let instances = borrow.instances();
+
+            instance_data.extend(
+                instances
+                    .iter()
+                    .map(|i| greedy_voxel_combined::Instance { data: i.data }),
+            );
+            order.push((*position, instances.len()));
+        }
+    }
+
+    instance_data
+}
+
 #[allow(dead_code)]
 pub struct ChunkManager {
-    chunks: HashMap<[i32; 3], RefCell<chunk::Chunk>>,
+    chunks: HashMap<IVec3, RefCell<chunk::Chunk>>,
     combined: Option<CombinedInstanceData>,
+    outline_mesh: BasicMesh<renderer::draw::line::Vertex>,
     frustum_cull: bool,
 }
 
 pub struct CombinedInstanceData {
-    pub pos_order: Vec<([i32; 3], usize)>,
+    pub pos_order: Vec<(IVec3, usize)>,
     chunk_data_buffer: ShaderBuffer<greedy_voxel_combined::buffers::ChunkData>,
     indirect_buffer: GpuBuffer,
     mesh: NInstancedMesh<greedy_voxel_combined::Vertex, greedy_voxel_combined::Instance>,
@@ -148,9 +157,33 @@ impl ChunkManager {
             None
         };
 
+        let outline_color = vec3(0.0, 0.0, 0.0);
+
+        let outlines = [
+            Line::new(vec3(0.0, 0.0, 0.0), vec3(1.0, 0.0, 0.0), outline_color),
+            Line::new(vec3(0.0, 0.0, 0.0), vec3(0.0, 1.0, 0.0), outline_color),
+            Line::new(vec3(0.0, 0.0, 0.0), vec3(0.0, 0.0, 1.0), outline_color),
+            Line::new(vec3(1.0, 1.0, 1.0), vec3(0.0, 1.0, 1.0), outline_color),
+            Line::new(vec3(1.0, 1.0, 1.0), vec3(1.0, 0.0, 1.0), outline_color),
+            Line::new(vec3(1.0, 1.0, 1.0), vec3(1.0, 1.0, 0.0), outline_color),
+            Line::new(vec3(0.0, 0.0, 1.0), vec3(0.0, 1.0, 1.0), outline_color),
+            Line::new(vec3(1.0, 0.0, 0.0), vec3(1.0, 1.0, 0.0), outline_color),
+            Line::new(vec3(0.0, 1.0, 0.0), vec3(1.0, 1.0, 0.0), outline_color),
+            Line::new(vec3(0.0, 1.0, 0.0), vec3(0.0, 1.0, 1.0), outline_color),
+            Line::new(vec3(0.0, 0.0, 1.0), vec3(1.0, 0.0, 1.0), outline_color),
+            Line::new(vec3(1.0, 0.0, 1.0), vec3(1.0, 0.0, 0.0), outline_color),
+        ]
+        .iter()
+        .flat_map(|l| l.to_vertices())
+        .collect::<Vec<_>>();
+
+        let outline_mesh =
+            BasicMesh::from_data(&outlines, None, None, None, false, false, DrawMode::Lines);
+
         Self {
             chunks: HashMap::new(),
             combined,
+            outline_mesh,
             frustum_cull,
         }
     }
@@ -198,8 +231,20 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
     let program = greedy_voxel_combined::Program::get();
     program.bind();
 
+    if manager
+        .chunks
+        .iter()
+        .any(|(p, c)| c.borrow_mut().update(p, &manager.chunks))
+    {
+        let instance_data = setup_chunks(&manager.chunks, Some(combined));
+
+        if let Err(e) = combined.mesh.set_instances(&instance_data) {
+            eprintln!("Failed to set combined greedy instances: {:?}", e);
+        }
+    }
+
     fn setup_multidraw(
-        chunks: &HashMap<[i32; 3], RefCell<Chunk>>,
+        chunks: &HashMap<IVec3, RefCell<Chunk>>,
         combined: &CombinedInstanceData,
         frustum: &Frustum,
     ) -> (ChunkData, Vec<DrawArraysIndirectCommand>) {
@@ -278,4 +323,174 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
     }
 
     draw_combined(len);
+
+    if let Some((chunk_pos, in_chunk_pos)) = get_looked_at_block(state.cameras.active(), manager) {
+        let mut pos = (vec3(
+            chunk_pos[0] as f32,
+            chunk_pos[1] as f32,
+            chunk_pos[2] as f32,
+        ) * 32.0)
+            + vec3(
+                in_chunk_pos[0] as f32,
+                in_chunk_pos[1] as f32,
+                in_chunk_pos[2] as f32,
+            );
+
+        let mut model = Mat4::IDENTITY;
+
+        if pos.x < 0.0 {
+            pos.x += 1.0;
+        }
+
+        if pos.y < 0.0 {
+            pos.y += 1.0;
+        }
+
+        if pos.z < 0.0 {
+            pos.z += 1.0;
+        }
+
+        model.w_axis.x = pos.x;
+        model.w_axis.y = pos.y;
+        model.w_axis.z = pos.z;
+
+        let program = renderer::draw::line::Program::get();
+        let uniforms = renderer::draw::line::Uniforms {
+            model: Some(model.to_cols_array_2d()),
+        };
+
+        state.draw(&mut manager.outline_mesh, &program, &uniforms);
+
+        if state.is_clicked(winit::event::MouseButton::Left) {
+            let chunk = manager
+                .chunks
+                .get_mut(&chunk_pos)
+                .expect("Looking at chunk that doesn't exist?");
+
+            chunk.borrow_mut().set(in_chunk_pos, BlockType::Air);
+        }
+    }
+}
+
+fn get_looked_at_block(camera: &dyn Camera, manager: &mut ChunkManager) -> Option<(IVec3, IVec3)> {
+    renderer::profiler::event!("Greedy Get Looked At Block");
+
+    //http://www.cse.yorku.ca/~amana/research/grid.pdf
+    let forward = camera.forward();
+
+    let mut current = camera.transform().position;
+    let end = current + (forward * 6.0);
+
+    let delta = vec3(
+        (end.x - current.x).abs(),
+        (end.y - current.y).abs(),
+        (end.z - current.z).abs(),
+    );
+
+    let step = vec3(forward.x.signum(), forward.y.signum(), forward.z.signum());
+
+    let hypotenuse = (delta.x.powi(2) + delta.y.powi(2) + delta.z.powi(2)).sqrt();
+    let hypotenuse_half = hypotenuse / 2.0;
+
+    let mut t_max = vec3(
+        hypotenuse_half / delta.x,
+        hypotenuse_half / delta.y,
+        hypotenuse_half / delta.z,
+    );
+
+    let t_delta = vec3(
+        hypotenuse / delta.x,
+        hypotenuse / delta.y,
+        hypotenuse / delta.z,
+    );
+
+    macro_rules! inc_x {
+        () => {
+            t_max.x += t_delta.x;
+            current.x += step.x;
+        };
+    }
+
+    macro_rules! inc_y {
+        () => {
+            t_max.y += t_delta.y;
+            current.y += step.y;
+        };
+    }
+
+    macro_rules! inc_z {
+        () => {
+            t_max.z += t_delta.z;
+            current.z += step.z;
+        };
+    }
+
+    let compare = |current: &Vec3, end: &Vec3| {
+        let x = if step.x < 0.0 {
+            current.x >= end.x
+        } else {
+            current.x <= end.x
+        };
+
+        let y = if step.y < 0.0 {
+            current.y >= end.y
+        } else {
+            current.y <= end.y
+        };
+
+        let z = if step.z < 0.0 {
+            current.z >= end.z
+        } else {
+            current.z <= end.z
+        };
+
+        x && y && z
+    };
+
+    while compare(&current, &end) {
+        if t_max.x < t_max.y {
+            if t_max.x < t_max.z {
+                inc_x!();
+            } else if t_max.x > t_max.z {
+                inc_z!();
+            } else {
+                inc_x!();
+                inc_z!();
+            }
+        } else if t_max.x > t_max.y {
+            if t_max.y < t_max.z {
+                inc_y!();
+            } else if t_max.y > t_max.z {
+                inc_z!();
+            } else {
+                inc_y!();
+                inc_z!();
+            }
+        } else if t_max.y < t_max.z {
+            inc_x!();
+            inc_y!();
+        } else if t_max.y > t_max.z {
+            inc_z!();
+        } else {
+            inc_x!();
+            inc_y!();
+            inc_z!();
+        }
+
+        let (chunk_pos, in_chunk_pos) = seperate_global_pos(ivec3(
+            current.x.floor() as i32,
+            current.y.floor() as i32,
+            current.z.floor() as i32,
+        ));
+
+        if let Some(chunk) = manager.chunks.get(&chunk_pos) {
+            let block = chunk.borrow().get(in_chunk_pos);
+
+            if block.is_solid() {
+                return Some((chunk_pos, in_chunk_pos));
+            }
+        }
+    }
+
+    None
 }
