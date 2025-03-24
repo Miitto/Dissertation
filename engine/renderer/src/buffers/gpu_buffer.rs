@@ -47,9 +47,14 @@ impl GpuBuffer {
             self.mode,
             BufferMode::Persistent | BufferMode::PersistentCoherent
         ) {
-            Some(unsafe {
-                gl::MapNamedBufferRange(self.id, 0, self.size as isize, self.mode.to_buf_store())
-            })
+            let map = match self.buf_mode() {
+                BufferMode::Persistent => {
+                    self.buf_mode().to_buf_store() | gl::MAP_FLUSH_EXPLICIT_BIT
+                }
+                BufferMode::PersistentCoherent => self.buf_mode().to_buf_store(),
+                _ => unreachable!(),
+            };
+            Some(unsafe { gl::MapNamedBufferRange(self.id, 0, self.size as isize, map) })
         } else {
             None
         };
@@ -78,7 +83,10 @@ impl Buffer for GpuBuffer {
     }
 
     fn immutable(&self) -> bool {
-        matches!(self.mode, BufferMode::Immutable | BufferMode::Persistent)
+        matches!(
+            self.mode,
+            BufferMode::Immutable | BufferMode::Persistent | BufferMode::PersistentCoherent
+        )
     }
 
     fn empty(size: usize, mode: BufferMode) -> Result<Self, BufferError> {
