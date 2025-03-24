@@ -41,6 +41,22 @@ struct Args {
     combine: bool,
 }
 
+struct Prolfiler(String);
+
+impl Prolfiler {
+    pub fn new(args: &Args) -> Self {
+        let test_name = format!("{:?}_{:?}", args.test, args.scene);
+        renderer::profiler::start_capture();
+        Self(test_name)
+    }
+}
+
+impl Drop for Prolfiler {
+    fn drop(&mut self) {
+        renderer::profiler::stop_capture(self.0.as_str());
+    }
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -48,13 +64,12 @@ fn main() {
 
     let event_loop = make_event_loop();
 
-    let test_name = format!("{:?}_{:?}", args.test, args.scene);
-
     let mut app = App::new(args);
 
-    renderer::profiler::start_capture();
-    let _ = event_loop.run_app(&mut app);
-    renderer::profiler::stop_capture(test_name.as_str());
+    {
+        // let _profiler = Prolfiler::new(&app.args);
+        let _ = event_loop.run_app(&mut app);
+    }
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
