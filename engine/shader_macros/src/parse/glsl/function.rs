@@ -1,7 +1,8 @@
 use proc_macro::{Delimiter, Diagnostic, Level, Span, TokenTree};
 
 use crate::Result;
-use crate::parse::{Delimited, punct};
+use crate::parse::{Delimited, ident, punct};
+use crate::shader_var::{InputQualifier, ShaderFunctionParam};
 
 use super::parse_var;
 use crate::{parse::delimited, shader_info::ShaderInfo, shader_var::ShaderFunction};
@@ -42,8 +43,27 @@ pub fn parse_function<'a>(
             first = false;
         }
 
+        let qual = if let Ok((rest, _)) = ident("in")(params_content) {
+            params_content = rest;
+            Some(InputQualifier::In)
+        } else if let Ok((rest, _)) = ident("out")(params_content) {
+            params_content = rest;
+            Some(InputQualifier::Out)
+        } else if let Ok((rest, _)) = ident("inout")(params_content) {
+            params_content = rest;
+            Some(InputQualifier::InOut)
+        } else {
+            None
+        };
+
         let (rest, var) = parse_var(params_content, info)?;
-        args.push(var);
+
+        let param = ShaderFunctionParam {
+            var,
+            qualifier: qual,
+        };
+
+        args.push(param);
         params_content = rest;
     }
 

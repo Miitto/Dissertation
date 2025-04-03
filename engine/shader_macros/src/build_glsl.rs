@@ -1,9 +1,11 @@
 use proc_macro::{Diagnostic, Level};
-use std::fmt::Write;
+use std::{fmt::Write, fs::OpenOptions, io::Write as _};
 
 use crate::{
     ProgramInput, ShaderInfo, shader_info::ComputeInfo, shader_var::ShaderType, uniform::Uniform,
 };
+
+const WRITE_COMPUTE: bool = true;
 
 fn get_uniforms(info: &ShaderInfo) -> String {
     info.uniforms
@@ -105,7 +107,7 @@ pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Strin
         return "".to_string();
     };
 
-    let vertex_input = match &vertex_fn.params[0].t {
+    let vertex_input = match &vertex_fn.params[0].var.t {
         ShaderType::Struct(s) => s,
         _ => {
             panic!("Fragment function must take a struct as input");
@@ -115,7 +117,7 @@ pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Strin
     let in_vars = {
         let iter = vertex_input.fields.iter();
 
-        if let Some(instance) = vertex_fn.params.get(1).map(|i| match &i.t {
+        if let Some(instance) = vertex_fn.params.get(1).map(|i| match &i.var.t {
             ShaderType::Struct(s) => s,
             _ => {
                 panic!("Vertex function must take a struct as input");
@@ -147,7 +149,7 @@ pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Strin
     );
 
     let (instance_to_struct, main_instance_param) = if let Some(instance) =
-        vertex_fn.params.get(1).map(|i| match &i.t {
+        vertex_fn.params.get(1).map(|i| match &i.var.t {
             ShaderType::Struct(s) => s,
             _ => {
                 panic!("Vertex function must take a struct as input");
@@ -275,7 +277,7 @@ pub fn fragment_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Str
         .params
         .first()
         .map(|f| {
-            let frag_input = &f.t;
+            let frag_input = &f.var.t;
 
             let frag_input = match frag_input {
                 ShaderType::Struct(s) => s,
@@ -391,7 +393,7 @@ pub fn compute(info: &ComputeInfo, ProgramInput { content, .. }: &ProgramInput) 
     let main = info.function.to_string();
     let fn_name = info.name.to_string();
 
-    format!(
+    let s = format!(
         r#"// Structs
 {structs}
 
@@ -414,5 +416,18 @@ void main() {{
 }}
 "#,
         info.size.0, info.size.1, info.size.2
-    )
+    );
+
+    if WRITE_COMPUTE {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}.comp.glsl", info.name))
+            .unwrap();
+
+        file.write_all(s.as_bytes()).unwrap();
+    }
+
+    s
 }

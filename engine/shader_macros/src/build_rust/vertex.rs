@@ -14,7 +14,7 @@ pub fn vertex_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::Toke
             .first()
             .expect("Vertex function must have one parameter");
 
-        let vertex_input = match &in_param.t {
+        let vertex_input = match &in_param.var.t {
             ShaderType::Struct(s) => s,
             _ => panic!("Vertex function must take structs as input"),
         };
@@ -41,7 +41,7 @@ pub fn vertex_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::Toke
 
     let instance_struct =
         if let Some(param) = &info.vertex_fn.as_ref().and_then(|f| f.params.get(1)) {
-            let vertex_input = match &param.t {
+            let vertex_input = match &param.var.t {
                 ShaderType::Struct(s) => s,
                 _ => panic!("Vertex function must take structs as input"),
             };

@@ -229,7 +229,7 @@ impl ToTokens for ShaderStruct {
 #[derive(Clone, Debug)]
 pub(crate) struct ShaderFunction {
     pub var: ShaderVar,
-    pub params: Vec<ShaderVar>,
+    pub params: Vec<ShaderFunctionParam>,
     pub content: String,
 }
 
@@ -247,5 +247,40 @@ impl Display for ShaderFunction {
             "{} {}({}) {{\n{}\n}}",
             self.var.t, self.var.name, params, self.content
         )
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) struct ShaderFunctionParam {
+    pub var: ShaderVar,
+    pub qualifier: Option<InputQualifier>,
+}
+
+impl Display for ShaderFunctionParam {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let qual = self
+            .qualifier
+            .as_ref()
+            .map(|q| format!("{} ", q))
+            .unwrap_or("".to_string());
+
+        write!(f, "{}{}", qual, self.var)
+    }
+}
+
+#[derive(Clone, Debug)]
+pub(crate) enum InputQualifier {
+    In,
+    Out,
+    InOut,
+}
+
+impl Display for InputQualifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::In => write!(f, "in"),
+            Self::Out => write!(f, "out"),
+            Self::InOut => write!(f, "inout"),
+        }
     }
 }
