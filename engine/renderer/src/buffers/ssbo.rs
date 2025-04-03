@@ -1,6 +1,8 @@
 use std::marker::PhantomData;
 
-use crate::{LayoutBlock, SSBO, SSBOBlock, UniformBlock};
+use crate::Program;
+
+use crate::{LayoutBlock, SSBO, SSBOBlock, UniformBlock, Uniforms};
 
 use super::{Buffer, BufferError, BufferMode, FencedRawBuffer, RawBuffer};
 
@@ -123,6 +125,15 @@ where
     U: LayoutBlock + UniformBlock,
 {
     pub fn bind(&self) {
+        self.bind_to(gl::UNIFORM_BUFFER);
+    }
+}
+
+impl<U> Uniforms for ShaderBuffer<U>
+where
+    U: LayoutBlock + UniformBlock,
+{
+    fn bind(&self, _: &Program) {
         self.bind_to(gl::UNIFORM_BUFFER);
     }
 }

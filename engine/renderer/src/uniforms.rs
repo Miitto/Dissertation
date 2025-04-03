@@ -30,3 +30,15 @@ pub trait SSBO {
 }
 
 pub trait SSBOBlock: LayoutBlock {}
+
+impl Uniforms for () {
+    fn bind(&self, _: &Program) {}
+}
+
+impl Uniforms for [&dyn Uniforms] {
+    fn bind(&self, program: &Program) {
+        for uniform in self.iter() {
+            uniform.bind(program);
+        }
+    }
+}
