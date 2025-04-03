@@ -42,7 +42,7 @@ where
     let depths = build_depths(&get_fn);
     let culled = cull_depths(depths);
 
-    let block_faces = depths_to_block_faces(culled, get_fn);
+    let block_faces = depths_to_faces(culled, get_fn);
 
     greedy_faces(block_faces)
 }
@@ -61,7 +61,7 @@ where
         x: usize,
         y: usize,
         z: usize,
-        depths: &mut Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]>,
+        depths: &mut [[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3],
     ) {
         if solid {
             depths[usize::from(Axis::X)][y][z] |= 1 << x;
@@ -190,14 +190,14 @@ where
     faces
 }
 
-pub fn culled_faces(depths: TransformedBlockDepths) -> Vec<Vec<GreedyFace>> {
+pub fn culled_faces(faces: TransformedBlockDepths) -> Vec<Vec<GreedyFace>> {
     let mut culled = vec![vec![], vec![], vec![], vec![], vec![], vec![]];
 
     for dir in Dir::all() {
         let face = &mut culled[usize::from(dir)];
-        for (block_type, dir_depth) in depths[usize::from(dir)].iter() {
+        for (block_type, dir_depth) in faces[usize::from(dir)].iter() {
             for depth in 0..CHUNK_SIZE {
-                let faces = culled_face(&dir_depth[depth], depth as u8, &block_type);
+                let faces = culled_face(&dir_depth[depth], depth as u8, block_type);
                 face.extend(faces);
             }
         }
@@ -244,54 +244,6 @@ pub fn culled_face(face: &[u32; 32], depth: u8, block_type: &BlockType) -> Vec<G
     });
 
     quads
-}
-
-pub fn depths_to_block_faces<F>(depths: FaceDepths, get_fn: F) -> TransformedBlockDepths
-where
-    F: Fn(isize, isize, isize) -> BlockType,
-{
-    let mut faces: TransformedBlockDepths = [
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-        HashMap::new(),
-    ];
-
-    for dir in Dir::all() {
-        for z in 0..CHUNK_SIZE {
-            for x in 0..CHUNK_SIZE {
-                // Cut the padding, as it's not part of the chunk
-                let mut col = depths[usize::from(dir)][z + 1][x + 1];
-                col >>= 1;
-                col &= !(1 << CHUNK_SIZE);
-
-                while col != 0 {
-                    // Get the depth
-                    let y = col.trailing_zeros() as usize;
-
-                    // Clear least signicant set bit
-                    // This marks that depth as read,
-                    // so we can get the next
-                    col &= col - 1;
-
-                    let pos = match dir {
-                        Dir::Up | Dir::Down => ivec3(x as i32, y as i32, z as i32),
-                        Dir::Left | Dir::Right => ivec3(y as i32, z as i32, x as i32),
-                        Dir::Forward | Dir::Backward => ivec3(x as i32, z as i32, y as i32),
-                    };
-
-                    let block_type = get_fn(pos.x as isize, pos.y as isize, pos.z as isize);
-
-                    let data = faces[usize::from(dir)].entry(block_type).or_default();
-                    data[y][x] |= 1 << z;
-                }
-            }
-        }
-    }
-
-    faces
 }
 
 pub fn greedy_faces(mut depths: TransformedBlockDepths) -> GreedyFaces {
