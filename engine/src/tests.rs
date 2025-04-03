@@ -23,6 +23,7 @@ pub enum Test {
     Culled,
     Greedy,
     Raymarch,
+    Flat,
     Svt64,
 }
 

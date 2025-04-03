@@ -21,6 +21,11 @@ vec4 get_block_color(uint block_type) {
             color = vec3(0.7, 0.7, 0.7);
             break;
         }
+        case 255:
+        {
+            color = vec3(1.0, 1.0, 1.0);
+            break;
+        }
     }
 
     return vec4(color, 1.0);

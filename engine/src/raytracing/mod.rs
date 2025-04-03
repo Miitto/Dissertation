@@ -8,6 +8,7 @@ use renderer::{
 use shaders::ComputeProgram;
 
 pub mod esvo;
+pub mod flat;
 pub mod svt64;
 
 pub fn setup_screen(state: &State) -> Screen {
@@ -106,16 +107,13 @@ impl Screen {
 
 impl Renderable for Screen {
     fn render(&mut self, state: &mut renderer::State) {
-        self.check_resolution(state);
+        self.pre_render(state);
 
         let compute = raymarching::cMain::get();
 
-        self.resolution_buffer.bind();
-
         compute.dispatch(self.resolution.x, self.resolution.y, 1);
 
-        self.framebuffer
-            .blit_to_screen(self.resolution.x as i32, self.resolution.y as i32);
+        self.post_render();
     }
 }
 

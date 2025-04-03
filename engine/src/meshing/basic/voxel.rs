@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use glam::{IVec3, Mat4, mat4, vec4};
-use renderer::{Renderable, State, mesh::basic::BasicMesh};
+use renderer::{Renderable, State, buffers::ShaderBuffer, mesh::basic::BasicMesh};
 use shaders::Program;
 
 use crate::common::BlockType;
@@ -89,10 +89,12 @@ impl Voxel {
 
 impl Renderable for Voxel {
     fn render(&mut self, state: &mut State) {
-        let uniforms = basic_voxel::Uniforms {
-            modelMatrix: self.get_model_matrix().to_cols_array_2d(),
+        let uniforms = basic_voxel::uniforms::BlockData {
+            block_position: self.position.into(),
             block_type: self.block_type.into(),
         };
+
+        let uniforms = ShaderBuffer::single(&uniforms).expect("Failed to create uniform buffer");
 
         let program = basic_voxel::Program::get();
 
@@ -106,8 +108,11 @@ shaders::program!(basic_voxel, {
 
 #snippet renderer::camera_matrices
 
-uniform mat4 modelMatrix;
-uniform uint block_type;
+#bind 1
+uniform BlockData {
+    uint block_type;
+    ivec3 block_position;
+};
 
 struct vIn {
     ivec3 position;
@@ -123,11 +128,11 @@ v2f vertex(vIn i) {
     v2f o;
     mat4 pv = camera.projection * camera.inverse_view;
 
-    mat4 mvp = pv * modelMatrix;
-
     o.color = get_block_color(block_type);
 
-    gl_Position = mvp * vec4(i.position, 1.0);
+    ivec3 pos = i.position + block_position;
+
+    gl_Position = pv * vec4(pos, 1.0);
     return o;
 }
 

@@ -230,7 +230,7 @@ pub fn get_looked_at_block(
 
     let step = vec3(forward.x.signum(), forward.y.signum(), forward.z.signum());
 
-    let hypotenuse = (delta.x.powi(2) + delta.y.powi(2) + delta.z.powi(2)).sqrt();
+    let hypotenuse = delta.length();
     let hypotenuse_half = hypotenuse / 2.0;
 
     let mut t_max = vec3(
