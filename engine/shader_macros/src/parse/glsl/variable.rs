@@ -1,4 +1,4 @@
-use proc_macro::{Diagnostic, Ident, Level, Span, TokenTree};
+use proc_macro::{Diagnostic, Level, TokenTree};
 
 use crate::Result;
 use crate::parse::{delimited, ident_any};

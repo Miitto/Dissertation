@@ -60,7 +60,7 @@ fn check_non_block<'a>(
     if matches!(var.t, ShaderType::Texture(_)) {
         let (input, _) = punct(';')(input).map_err(|_| {
             Diagnostic::spanned(
-                input.get(0).map(|t| t.span()).unwrap_or(var.name.span()),
+                input.first().map(|t| t.span()).unwrap_or(var.name.span()),
                 Level::Error,
                 "Expected ;",
             )

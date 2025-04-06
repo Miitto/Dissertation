@@ -370,6 +370,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "common"
+version = "0.1.0"
+dependencies = [
+ "bracket-noise",
+ "clap",
+ "glam",
+ "renderer",
+]
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -528,11 +538,11 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 name = "engine"
 version = "0.1.0"
 dependencies = [
- "bracket-noise",
- "clap",
- "criterion",
+ "common",
  "gl",
  "glam",
+ "meshing",
+ "raytracing",
  "renderer",
  "shaders",
  "winit",
@@ -884,6 +894,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
 dependencies = [
  "autocfg",
+]
+
+[[package]]
+name = "meshing"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "criterion",
+ "gl",
+ "glam",
+ "renderer",
+ "winit",
 ]
 
 [[package]]
@@ -1350,6 +1372,17 @@ checksum = "1465873a3dfdaa8ae7cb14b4383657caab0b3e8a0aa9ae8e04b044854c8dfce2"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+]
+
+[[package]]
+name = "raytracing"
+version = "0.1.0"
+dependencies = [
+ "common",
+ "gl",
+ "glam",
+ "renderer",
+ "winit",
 ]
 
 [[package]]

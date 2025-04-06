@@ -1,6 +1,4 @@
-use clap::Parser;
 use renderer::{Renderable, State, camera::CameraManager, make_event_loop, make_window};
-use tests::{Scene, Test};
 use winit::{
     application::ApplicationHandler,
     event::{DeviceEvent, MouseScrollDelta, WindowEvent},
@@ -8,41 +6,12 @@ use winit::{
     keyboard::PhysicalKey,
 };
 
-mod common;
-mod meshing;
-mod raytracing;
-mod tests;
+use common::{Args, Parser, tests::Test};
 
-#[derive(clap::Parser, Debug)]
-#[command(version, about, long_about = None)]
-struct Args {
-    /// Scene to use
-    #[arg(short, long, default_value = "single")]
-    scene: Scene,
-
-    /// Test type
-    #[arg(short, long, default_value = "basic")]
-    test: Test,
-
-    /// Radius
-    #[arg(short, long, default_value = "8")]
-    radius: i32,
-
-    /// Height
-    #[arg(short, long, default_value = "8")]
-    depth: i32,
-
-    /// Frustum Culling
-    #[arg(short, long, default_value = "false")]
-    frustum_cull: bool,
-
-    /// Combine Draw calls using SSBO
-    #[arg(short, long, default_value = "false")]
-    combine: bool,
-}
-
+#[allow(dead_code)]
 struct Prolfiler(String);
 
+#[allow(dead_code)]
 impl Prolfiler {
     pub fn new(args: &Args) -> Self {
         let test_name = format!("{:?}_{:?}", args.test, args.scene);

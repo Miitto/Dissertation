@@ -36,12 +36,6 @@ impl Indices for Ebo {
     }
 }
 
-impl Drop for Ebo {
-    fn drop(&mut self) {
-        unsafe { gl::DeleteBuffers(1, &Indices::id(self)) };
-    }
-}
-
 impl Buffer for Ebo {
     fn buf_mode(&self) -> BufferMode {
         self.buffer.buf_mode()

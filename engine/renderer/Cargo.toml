@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dev-dependencies]
+criterion = "0.5.1"
 
 [[bench]]
 name = "BufferWrites"
@@ -11,7 +12,6 @@ path = "benches/buffers.rs"
 harness = false
 
 [dependencies]
-criterion = "0.5.1"
 shaders.workspace = true
 render_common.workspace = true
 glam.workspace = true

@@ -5,7 +5,7 @@ use crate::{
     ProgramInput, ShaderInfo, shader_info::ComputeInfo, shader_var::ShaderType, uniform::Uniform,
 };
 
-const WRITE_COMPUTE: bool = true;
+const WRITE_COMPUTE: bool = false;
 
 fn get_uniforms(info: &ShaderInfo) -> String {
     info.uniforms

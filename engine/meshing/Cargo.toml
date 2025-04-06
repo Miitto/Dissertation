@@ -1,0 +1,18 @@
+[package]
+name = "meshing"
+version = "0.1.0"
+edition = "2024"
+
+[dev-dependencies]
+criterion = "0.5.1"
+
+[[bench]]
+name = "binary"
+harness = false
+
+[dependencies]
+renderer.workspace = true
+glam.workspace = true
+common.workspace = true
+winit.workspace = true
+gl.workspace = true

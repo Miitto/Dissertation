@@ -1,3 +1,5 @@
+use std::hint::black_box;
+
 use criterion::Criterion;
 
 extern crate renderer;
@@ -60,7 +62,7 @@ pub fn write(c: &mut Criterion) {
 fn chunk_test(name: &str, buffer: &mut FencedRawBuffer, c: &mut Criterion) {
     c.bench_function(format!("{name} All").as_str(), |b| {
         b.iter(|| {
-            _ = buffer.set_data_no_alloc(&DATA);
+            _ = buffer.set_data_no_alloc(black_box(&DATA));
             while !buffer.signalled() {}
         })
     });
@@ -69,7 +71,7 @@ fn chunk_test(name: &str, buffer: &mut FencedRawBuffer, c: &mut Criterion) {
         for offset in (0..SIZE).step_by(chunk_size) {
             let segment = &DATA[offset..(offset + chunk_size)];
 
-            _ = buffer.set_offset_data_no_alloc(offset, segment);
+            _ = buffer.set_offset_data_no_alloc(black_box(offset), black_box(segment));
         }
         while !buffer.signalled() {}
     };
@@ -91,7 +93,11 @@ fn chunk_map_test(name: &str, buffer: &mut FencedRawBuffer, c: &mut Criterion) {
                 let segment = &DATA[offset..(offset + chunk_size)];
 
                 unsafe {
-                    mapping.write(segment.as_ptr().add(offset), chunk_size, offset);
+                    mapping.write(
+                        black_box(segment.as_ptr().add(offset)),
+                        black_box(chunk_size),
+                        black_box(offset),
+                    );
                 }
             }
         }

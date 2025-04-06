@@ -4,9 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [workspace]
-members = ["render_common", "renderer", "shader_macros", "shaders"]
+members = [
+  "common",
+  "meshing",
+  "raytracing",
+  "render_common",
+  "renderer",
+  "shader_macros",
+  "shaders",
+]
 
 [workspace.dependencies]
+common = { path = "./common" }
 render_common = { path = "./render_common" }
 renderer = { path = "./renderer/" }
 glam = "0.30.0"
@@ -16,14 +25,12 @@ glutin = "0.32.2"
 winit = "0.30.9"
 log = { version = "0.4.26", features = ["std"] }
 
-[dev-dependencies]
-criterion = "0.5.1"
-
 [dependencies]
+meshing = { path = "./meshing" }
+raytracing = { path = "./raytracing" }
 renderer.workspace = true
+common.workspace = true
 shaders.workspace = true
 glam.workspace = true
 winit.workspace = true
 gl.workspace = true
-clap = { version = "4.5.31", features = ["derive"] }
-bracket-noise = "0.8.7"

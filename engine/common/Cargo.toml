@@ -1,0 +1,10 @@
+[package]
+name = "common"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam.workspace = true
+renderer.workspace = true
+clap = { version = "4.5.31", features = ["derive"] }
+bracket-noise = "0.8.7"
