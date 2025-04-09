@@ -1,4 +1,4 @@
-use glam::{EulerRot, Mat4, Quat, Vec3};
+use glam::{EulerRot, Mat4, Quat, Vec3, vec3};
 use winit::keyboard::KeyCode;
 
 use crate::{Input, Transform, math::perspective};
@@ -24,7 +24,10 @@ pub struct PerspectiveCamera {
 impl Default for PerspectiveCamera {
     fn default() -> Self {
         Self {
-            transform: Transform::default(),
+            transform: Transform {
+                position: vec3(0.0, 30.0, 0.0),
+                ..Default::default()
+            },
             fov: 90.0,
             aspect_ratio: 16.0 / 9.0,
             near: 0.1,
@@ -52,6 +55,10 @@ impl Camera for PerspectiveCamera {
 
     fn transform(&self) -> &Transform {
         &self.transform
+    }
+
+    fn transform_mut(&mut self) -> &mut Transform {
+        &mut self.transform
     }
 
     fn translate(&mut self, direction: crate::Dir, delta: f32) {

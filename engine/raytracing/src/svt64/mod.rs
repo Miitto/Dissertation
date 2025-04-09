@@ -32,6 +32,10 @@ impl Renderable for Svt64Renderer {
 
         self.screen.post_render();
     }
+
+    fn cull(&mut self, cull: bool) {}
+
+    fn combine(&mut self, combine: bool) {}
 }
 
 pub fn setup(args: &Args, state: &State) -> Box<dyn Renderable> {

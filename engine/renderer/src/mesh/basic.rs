@@ -151,6 +151,14 @@ where
         self.frustum_cull = true;
     }
 
+    pub fn disable_frustum_cull(&mut self) {
+        self.frustum_cull = false;
+    }
+
+    pub fn set_frustum_cull(&mut self, frustum_cull: bool) {
+        self.frustum_cull = frustum_cull;
+    }
+
     fn is_on_frustum(&self, frustum: &crate::camera::frustum::Frustum) -> bool {
         !self.frustum_cull || self.bounds.intersects(frustum).into()
     }

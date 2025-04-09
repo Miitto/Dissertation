@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use dashmap::DashMap;
 use glam::{IVec3, ivec3};
 
 use common::BlockType;
@@ -35,11 +36,11 @@ impl Node {
     }
 }
 
-pub fn generate_tree(voxels: &HashMap<IVec3, BlockType>) -> (Vec<Node>, Vec<u32>) {
+pub fn generate_tree(voxels: &DashMap<IVec3, BlockType>) -> (Vec<Node>, Vec<u32>) {
     let mut nodes = vec![];
     let mut children = vec![];
 
-    let max_axis = voxels.iter().fold(0, |_, (p, _)| p.abs().max_element()) as usize;
+    let max_axis = voxels.iter().fold(0, |_, e| e.key().abs().max_element()) as usize;
 
     println!("Max Axis: {}", max_axis);
 
@@ -64,7 +65,7 @@ pub fn generate_tree(voxels: &HashMap<IVec3, BlockType>) -> (Vec<Node>, Vec<u32>
 }
 
 fn recurse_tree(
-    voxels: &HashMap<IVec3, BlockType>,
+    voxels: &DashMap<IVec3, BlockType>,
     nodes: &mut Vec<Node>,
     child_data: &mut Vec<u32>,
     scale: usize,
@@ -110,7 +111,7 @@ fn recurse_tree(
 }
 
 fn make_leaf(
-    voxels: &HashMap<IVec3, BlockType>,
+    voxels: &DashMap<IVec3, BlockType>,
     tree: &mut Node,
     child_data: &mut Vec<u32>,
     pos: IVec3,
@@ -126,7 +127,10 @@ fn make_leaf(
             for x in -2..2 {
                 let position = ivec3(pos.x + x, pos.y + y, pos.z + z);
 
-                let block = voxels.get(&position).unwrap_or(&BlockType::Air);
+                let block = voxels
+                    .get(&position)
+                    .map(|e| *e.value())
+                    .unwrap_or(BlockType::Air);
                 voxel_cube.push(block);
             }
         }
@@ -141,7 +145,7 @@ fn make_leaf(
     tree.set_child_ptr(child_data.len() as u32);
     child_data.extend(voxel_cube.iter().filter_map(|&v| {
         if v.is_solid() {
-            Some(Into::<u32>::into(*v))
+            Some(Into::<u32>::into(v))
         } else {
             None
         }

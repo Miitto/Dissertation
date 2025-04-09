@@ -1,6 +1,6 @@
 use crate::fence::Fence;
 
-use super::{Buffer, BufferError, BufferMode, GpuBuffer, Mapping, RawBuffer};
+use super::{Buffer, BufferError, BufferMode, GpuBuffer, Mapping, MappingAddr, RawBuffer};
 
 pub trait FencedBuffer: Buffer {
     type Buffer: Buffer;
@@ -140,7 +140,7 @@ impl RawBuffer for FencedRawBuffer {
         Ok(())
     }
 
-    fn raw_mapping(&self) -> Option<*mut std::os::raw::c_void> {
+    fn raw_mapping(&self) -> Option<MappingAddr> {
         self.buffer.raw_mapping()
     }
 

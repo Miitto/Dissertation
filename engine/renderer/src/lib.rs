@@ -165,7 +165,7 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
 
     unsafe {
         gl::Enable(gl::DEPTH_TEST);
-        gl::Enable(gl::CULL_FACE);
+        // gl::Enable(gl::CULL_FACE);
 
         gl::CullFace(gl::BACK);
         gl::FrontFace(gl::CCW);
@@ -182,6 +182,8 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
 
 pub trait Renderable {
     fn render(&mut self, state: &mut State);
+    fn cull(&mut self, cull: bool);
+    fn combine(&mut self, combine: bool);
 }
 
 extern "system" fn gl_error_callback(

@@ -1,8 +1,8 @@
-use super::RawBuffer;
+use super::{MappingAddr, RawBuffer};
 
 pub struct Mapping<'a, B: RawBuffer> {
     buffer: &'a mut B,
-    ptr: *mut std::os::raw::c_void,
+    ptr: MappingAddr,
     size: usize,
     needs_flush: bool,
     first_written: usize,
@@ -11,12 +11,7 @@ pub struct Mapping<'a, B: RawBuffer> {
 }
 
 impl<'a, B: RawBuffer> Mapping<'a, B> {
-    pub fn new(
-        buffer: &'a mut B,
-        loc: *mut std::os::raw::c_void,
-        size: usize,
-        coherant: bool,
-    ) -> Self {
+    pub fn new(buffer: &'a mut B, loc: MappingAddr, size: usize, coherant: bool) -> Self {
         Self {
             buffer,
             ptr: loc,
@@ -44,7 +39,7 @@ impl<'a, B: RawBuffer> Mapping<'a, B> {
             self.size
         );
 
-        unsafe { std::ptr::copy_nonoverlapping(src, self.ptr.add(offset) as *mut u8, size) }
+        unsafe { std::ptr::copy_nonoverlapping(src, self.ptr.ptr.add(offset) as *mut u8, size) }
 
         if !self.coherant {
             self.needs_flush = true;

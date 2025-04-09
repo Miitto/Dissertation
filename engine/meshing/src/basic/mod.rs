@@ -59,7 +59,6 @@ impl VoxelManager {
             let instances = voxels
                 .iter()
                 .map(|v| {
-                    println!("Pos: {} | Block: {:?}", v.get_position(), v.block_type);
                     let pos = v.get_position();
                     instanced_voxel::Instance {
                         pos: [pos.x, pos.y, pos.z],
@@ -128,11 +127,10 @@ impl Renderable for VoxelManager {
 
         let program = instanced_voxel::Program::get();
 
-        let uniforms = instanced_voxel::Uniforms {
-            viewMatrix: state.cameras.active().get_view().to_cols_array_2d(),
-            projectionMatrix: state.cameras.active().get_projection().to_cols_array_2d(),
-        };
-
-        state.draw(mesh, &program, &uniforms);
+        state.draw(mesh, &program, &());
     }
+
+    fn cull(&mut self, _cull: bool) {}
+
+    fn combine(&mut self, _combine: bool) {}
 }

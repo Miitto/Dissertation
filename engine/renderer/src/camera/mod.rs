@@ -19,6 +19,7 @@ pub trait Camera: std::fmt::Debug {
     fn get_projection(&self) -> Mat4;
     fn get_view(&self) -> Mat4;
     fn transform(&self) -> &Transform;
+    fn transform_mut(&mut self) -> &mut Transform;
     fn translate(&mut self, direction: Dir, delta: f32);
     fn rotate(&mut self, pitch_delta: f32, yaw_delta: f32, is_mouse: bool);
     fn handle_input(&mut self, keys: &Input, delta: f32);
@@ -258,7 +259,7 @@ impl Default for CameraManager {
 
         Self {
             cameras: vec![default_camera, Box::new(PerspectiveCamera::default())],
-            active_camera: 0,
+            active_camera: 1,
             scene_camera: 0,
             game_camera: 1,
             base_camera_gizmo_mesh: gizmo_mesh,

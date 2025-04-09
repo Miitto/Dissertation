@@ -9,3 +9,4 @@ glam.workspace = true
 common.workspace = true
 winit.workspace = true
 gl.workspace = true
+dashmap.workspace = true

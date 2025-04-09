@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
-use glam::{IVec3, Mat4, mat4, vec4};
+use glam::IVec3;
 use renderer::{ProgramSource, Renderable, State, buffers::ShaderBuffer, mesh::basic::BasicMesh};
 
 use common::BlockType;
@@ -66,21 +66,6 @@ impl Voxel {
         ]
     }
 
-    pub fn get_model_matrix(&self) -> Mat4 {
-        let position = vec4(
-            self.position[0] as f32,
-            self.position[1] as f32,
-            self.position[2] as f32,
-            1.0,
-        );
-
-        let forward = vec4(0., 0., -1., 0.);
-        let right = vec4(1., 0., 0., 0.);
-        let up = vec4(0., 1., 0., 0.);
-
-        mat4(right, up, forward, position)
-    }
-
     pub fn get_position(&self) -> IVec3 {
         self.position
     }
@@ -88,17 +73,19 @@ impl Voxel {
 
 impl Renderable for Voxel {
     fn render(&mut self, state: &mut State) {
-        let uniforms = basic_voxel::uniforms::BlockData {
+        let uniforms = basic_voxel::Uniforms {
             block_position: self.position.into(),
             block_type: self.block_type.into(),
         };
-
-        let uniforms = ShaderBuffer::single(&uniforms).expect("Failed to create uniform buffer");
 
         let program = basic_voxel::Program::get();
 
         state.draw(&mut *self.mesh.borrow_mut(), &program, &uniforms);
     }
+
+    fn cull(&mut self, _cull: bool) {}
+
+    fn combine(&mut self, _combine: bool) {}
 }
 
 renderer::program!(basic_voxel, {
@@ -107,11 +94,8 @@ renderer::program!(basic_voxel, {
 
 #snippet renderer::camera_matrices
 
-#bind 1
-uniform BlockData {
-    uint block_type;
-    ivec3 block_position;
-};
+uniform uint block_type;
+uniform ivec3 block_position;
 
 struct vIn {
     ivec3 position;
@@ -131,6 +115,8 @@ v2f vertex(vIn i) {
 
     ivec3 pos = i.position + block_position;
 
+    o.color.x = float(block_position.x);
+
     gl_Position = pv * vec4(pos, 1.0);
     return o;
 }
@@ -144,8 +130,7 @@ renderer::program!(instanced_voxel, {
     #vertex vert
     #fragment frag
 
-    uniform mat4 viewMatrix;
-    uniform mat4 projectionMatrix;
+    #snippet renderer::camera_matrices
 
     struct vIn {
         ivec3 position;
@@ -164,8 +149,7 @@ renderer::program!(instanced_voxel, {
 
     v2f vert(vIn i, iIn ii) {
         v2f o;
-        mat4 pv = projectionMatrix * viewMatrix;
-
+        mat4 pv = camera.projection * camera.inverse_view;
 
         o.color = get_block_color(ii.block_type);
 

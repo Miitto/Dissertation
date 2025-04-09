@@ -31,6 +31,9 @@ struct SyncObject {
     sync: gl::types::GLsync,
 }
 
+unsafe impl Send for SyncObject {}
+unsafe impl Sync for SyncObject {}
+
 impl SyncObject {
     pub fn new() -> Self {
         let sync = unsafe { gl::FenceSync(gl::SYNC_GPU_COMMANDS_COMPLETE, 0) };

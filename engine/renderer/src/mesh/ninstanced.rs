@@ -76,6 +76,14 @@ where
         self.frustum_cull = true;
     }
 
+    pub fn disable_frustum_culling(&mut self) {
+        self.frustum_cull = false;
+    }
+
+    pub fn set_frustum_cull(&mut self, frustum_cull: bool) {
+        self.frustum_cull = frustum_cull;
+    }
+
     fn get_first_available(&mut self) -> Option<usize> {
         self.instance_buffers.iter().position(|b| b.signalled())
     }

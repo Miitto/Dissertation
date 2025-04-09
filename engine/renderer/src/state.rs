@@ -15,6 +15,7 @@ pub struct State {
     last_frame_time: std::time::Instant,
     delta_time: f32,
     pub cameras: CameraManager,
+    frame_deltas: Vec<f64>,
 }
 
 impl State {
@@ -44,8 +45,8 @@ impl State {
         self.display = Some(Rc::new(display));
     }
 
-    fn frame_time(&self) -> f32 {
-        self.last_frame_time.elapsed().as_millis_f32()
+    fn frame_time(&self) -> f64 {
+        self.last_frame_time.elapsed().as_millis_f64()
     }
 
     pub fn delta(&self) -> f32 {
@@ -58,7 +59,9 @@ impl State {
 
     pub fn new_frame(&mut self) {
         crate::profiler::next_frame();
-        self.delta_time = self.frame_time();
+        let time = self.frame_time();
+        self.delta_time = time as f32;
+        self.frame_deltas.push(time);
         self.last_frame_time = std::time::Instant::now();
 
         unsafe {
@@ -78,6 +81,16 @@ impl State {
             gl::Finish();
             _ = display.surface.swap_buffers(&display.context);
         }
+    }
+
+    pub fn avg_fps(&self) -> f64 {
+        let sum: f64 = self.frame_deltas.iter().sum();
+        let avg = sum / self.frame_deltas.len() as f64;
+        1000. / avg
+    }
+
+    pub fn wipe_fps(&mut self) {
+        self.frame_deltas.clear();
     }
 
     pub fn is_pressed(&self, key: &KeyCode) -> bool {
@@ -151,6 +164,7 @@ impl Default for State {
             last_frame_time: std::time::Instant::now(),
             delta_time: 0.,
             cameras: CameraManager::default(),
+            frame_deltas: vec![],
         }
     }
 }

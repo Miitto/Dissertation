@@ -1,5 +1,6 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{cell::RefCell, collections::HashMap, sync::RwLock};
 
+use dashmap::DashMap;
 use glam::{IVec3, ivec3};
 use renderer::{
     Dir, DrawMode,
@@ -7,7 +8,7 @@ use renderer::{
     mesh::{Mesh, ninstanced::NInstancedMesh},
 };
 
-use crate::binary::common::make_greedy_faces;
+use crate::binary::common::{make_culled_faces, make_greedy_faces};
 use common::{BasicVoxel, BlockType, InstanceData, Voxel};
 
 use super::voxel::greedy_voxel;
@@ -15,17 +16,19 @@ use super::voxel::greedy_voxel;
 const CHUNK_SIZE: usize = 32;
 
 pub struct Chunk {
-    voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
-    bounds: BoundingHeirarchy,
-    instances: Vec<greedy_voxel::Instance>,
-    mesh: Option<NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>>,
-    needs_update: bool,
+    voxels: RwLock<Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>>,
+    bounds: RwLock<BoundingHeirarchy>,
+    instances: RwLock<Vec<greedy_voxel::Instance>>,
+    mesh: RwLock<Option<NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>>>,
+    greedy: RwLock<bool>,
+    needs_update: RwLock<bool>,
 }
 
 impl Chunk {
     fn new(
         voxels: Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>,
         make_mesh: bool,
+        greedy: bool,
         frustum_cull: bool,
     ) -> Self {
         let vertices = vec![
@@ -45,17 +48,24 @@ impl Chunk {
         };
 
         if frustum_cull {
-            if let Some(mesh) = &mut mesh {
-                mesh.enable_frustum_culling();
+            if let Some(ref mut mesh) = mesh {
+                mesh.set_frustum_cull(frustum_cull);
             }
         }
 
         Self {
-            voxels,
-            mesh,
-            bounds: BoundingHeirarchy::default(),
-            instances: vec![],
-            needs_update: true,
+            voxels: RwLock::new(voxels),
+            mesh: RwLock::new(mesh),
+            bounds: RwLock::new(BoundingHeirarchy::default()),
+            instances: RwLock::new(vec![]),
+            greedy: RwLock::new(greedy),
+            needs_update: RwLock::new(true),
+        }
+    }
+
+    pub fn set_frustum_culling(&self, frustum_cull: bool) {
+        if let Some(ref mut mesh) = *self.mesh.write().unwrap() {
+            mesh.set_frustum_cull(frustum_cull);
         }
     }
 
@@ -68,52 +78,54 @@ impl Chunk {
             return BlockType::Air;
         }
 
-        self.voxels[pos.x as usize][pos.y as usize][pos.z as usize].get_type()
+        self.voxels.read().unwrap()[pos.x as usize][pos.y as usize][pos.z as usize].get_type()
     }
 
-    pub fn set(&mut self, pos: IVec3, block_type: BlockType) {
+    pub fn set(&self, pos: IVec3, block_type: BlockType) {
         if pos.max_element() >= CHUNK_SIZE as i32 || pos.min_element() < 0 {
             eprintln!("Coord: {:?} is outside of chunk", pos);
             return;
         }
 
-        self.voxels[pos.x as usize][pos.y as usize][pos.z as usize].set_type(block_type);
+        self.voxels.write().unwrap()[pos.x as usize][pos.y as usize][pos.z as usize]
+            .set_type(block_type);
 
         self.invalidate()
     }
 
-    pub fn fill(block_type: BlockType, make_mesh: bool, frustum_cull: bool) -> Self {
+    pub fn fill(block_type: BlockType, make_mesh: bool, greedy: bool, frustum_cull: bool) -> Self {
         let voxels =
             Box::new([[[BasicVoxel::new(block_type); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]);
-        Self::new(voxels, make_mesh, frustum_cull)
+        Self::new(voxels, make_mesh, greedy, frustum_cull)
     }
 
-    fn invalidate(&mut self) {
-        self.needs_update = true;
+    fn invalidate(&self) {
+        *self.needs_update.write().unwrap() = true;
     }
 
-    pub fn bounds(&self) -> &BoundingHeirarchy {
-        &self.bounds
+    pub fn bounds(&self) -> BoundingHeirarchy {
+        *self.bounds.read().unwrap()
     }
 
-    pub fn update_bounds(&mut self, bounds: BoundingHeirarchy) {
-        self.bounds = bounds;
-        if let Some(mesh) = &mut self.mesh {
+    pub fn update_bounds(&self, bounds: BoundingHeirarchy) {
+        *self.bounds.write().unwrap() = bounds;
+        if let Some(ref mut mesh) = *self.mesh.write().unwrap() {
             mesh.set_bounds(bounds);
         }
     }
 
-    pub fn update(&mut self, position: &IVec3, chunks: &HashMap<IVec3, RefCell<Self>>) -> bool {
-        if !self.needs_update {
+    pub fn update(&self, position: &IVec3, chunks: &DashMap<IVec3, Self>) -> bool {
+        if !*self.needs_update.read().unwrap() {
             return false;
         }
+        dbg!("Updating chunk at {:?}", position);
 
         let get_fn = |x: isize, y: isize, z: isize| {
             if (0..CHUNK_SIZE as isize).contains(&x)
                 && (0..CHUNK_SIZE as isize).contains(&y)
                 && (0..CHUNK_SIZE as isize).contains(&z)
             {
-                return self.voxels[x as usize][y as usize][z as usize].get_type();
+                return self.voxels.read().unwrap()[x as usize][y as usize][z as usize].get_type();
             }
 
             let chunk_x_offset = if x < 0 {
@@ -168,15 +180,21 @@ impl Chunk {
                 z as usize
             };
 
-            chunk.borrow().voxels[x_pos][y_pos][z_pos].get_type()
+            chunk.voxels.read().unwrap()[x_pos][y_pos][z_pos].get_type()
         };
 
-        let greedy = make_greedy_faces(get_fn);
+        let faces = if *self.greedy.read().unwrap() {
+            make_greedy_faces(get_fn)
+        } else {
+            make_culled_faces(get_fn)
+        };
 
-        self.instances.clear();
+        let mut instances = self.instances.write().unwrap();
+
+        instances.clear();
 
         for dir in Dir::all() {
-            for face in greedy[usize::from(dir)].iter() {
+            for face in faces[usize::from(dir)].iter() {
                 let data = InstanceData::new(
                     face.x,
                     face.y,
@@ -188,29 +206,30 @@ impl Chunk {
                 )
                 .rotate_on_dir();
 
-                self.instances
-                    .push(greedy_voxel::Instance { data: data.into() });
+                instances.push(greedy_voxel::Instance { data: data.into() });
             }
         }
 
-        if let Some(mesh) = &mut self.mesh {
-            if let Err(e) = mesh.set_instances(self.instances.as_slice()) {
+        if let Some(ref mut mesh) = *self.mesh.write().unwrap() {
+            if let Err(e) = mesh.set_instances(instances.as_slice()) {
                 eprintln!("Error: {:?}", e);
             }
         }
 
-        self.needs_update = false;
+        println!("Updated {} instances", instances.len());
+
+        *self.needs_update.write().unwrap() = false;
 
         true
     }
 
     pub fn mesh(
-        &mut self,
-    ) -> Option<&mut NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>> {
-        self.mesh.as_mut()
+        &self,
+    ) -> &RwLock<Option<NInstancedMesh<greedy_voxel::Vertex, greedy_voxel::Instance>>> {
+        &self.mesh
     }
 
-    pub fn instances(&self) -> &[greedy_voxel::Instance] {
+    pub fn instances(&self) -> &RwLock<Vec<greedy_voxel::Instance>> {
         &self.instances
     }
 }

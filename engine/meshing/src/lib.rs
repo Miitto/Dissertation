@@ -3,7 +3,6 @@ use renderer::{ProgramSource, Renderable, buffers::ShaderBuffer, mesh::basic::Ba
 
 pub mod basic;
 pub mod binary;
-pub mod chunks;
 
 const VERTICES: [[f32; 2]; 3] = [[-0.5, -0.5], [0.0, 0.5], [0.5, -0.5]];
 
@@ -26,6 +25,10 @@ impl Renderable for Triangle {
 
         state.draw(&mut self.mesh, &program, &empty_uniforms);
     }
+
+    fn cull(&mut self, _cull: bool) {}
+
+    fn combine(&mut self, _combine: bool) {}
 }
 
 pub fn setup() -> Box<dyn Renderable> {

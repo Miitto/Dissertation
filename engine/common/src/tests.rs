@@ -1,25 +1,32 @@
 use std::collections::HashMap;
 
+use dashmap::DashMap;
+use rayon::prelude::*;
+
 use bracket_noise::prelude::{FastNoise, FractalType, NoiseType};
 use glam::{IVec3, ivec3};
 
 use crate::{Args, BlockType};
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq)]
 #[allow(dead_code)]
 pub enum Scene {
     Single,
     Cube,
-    Plane,
     Perlin,
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum)]
+impl Scene {
+    pub const fn all() -> [Scene; 3] {
+        [Self::Single, Self::Cube, Self::Perlin]
+    }
+}
+
+#[derive(Debug, Clone, Copy, clap::ValueEnum, PartialEq)]
 pub enum Test {
     Tri,
     Basic,
-    BasicInstanced,
-    Chunk,
+    Instanced,
     Culled,
     Greedy,
     Raymarch,
@@ -27,41 +34,28 @@ pub enum Test {
     Svt64,
 }
 
-pub fn test_scene(args: &Args) -> HashMap<IVec3, BlockType> {
+impl Test {
+    pub fn iter() -> impl Iterator<Item = Self> {
+        [Self::Basic, Self::Instanced, Self::Culled, Self::Greedy]
+            .iter()
+            .copied()
+    }
+}
+
+pub fn test_scene(args: &Args) -> DashMap<IVec3, BlockType> {
     println!("Creating test scene");
     let scene = match args.scene {
         Scene::Single => {
-            let mut map = HashMap::new();
-            map.insert(ivec3(0, 0, 0), BlockType::Grass);
+            let map = DashMap::new();
+            map.insert(ivec3(0, 30, -5), BlockType::Grass);
             map
         }
         Scene::Cube => {
-            let mut map = HashMap::new();
+            let map = DashMap::new();
             (0..32).for_each(|x| {
                 (0..32).for_each(|y| {
-                    (0..32).for_each(|z| {
+                    (32..64).for_each(|z| {
                         map.insert(ivec3(x, y, z), BlockType::Grass);
-                    })
-                })
-            });
-
-            map
-        }
-        Scene::Plane => {
-            let radius = args.radius;
-            let height = args.depth;
-
-            let mut map = HashMap::new();
-
-            (-radius..radius).for_each(|x| {
-                (0..height).for_each(|y| {
-                    (-radius..radius).for_each(|z| {
-                        let block = if y == height - 1 {
-                            BlockType::Grass
-                        } else {
-                            BlockType::Stone
-                        };
-                        map.insert(ivec3(x, y, z), block);
                     })
                 })
             });
@@ -82,15 +76,18 @@ pub fn test_scene(args: &Args) -> HashMap<IVec3, BlockType> {
             let radius = args.radius;
             let input_height = args.depth;
 
-            let mut blocks = HashMap::new();
+            let tuples: Vec<(i32, i32)> = (-radius..radius)
+                .flat_map(|x| (-radius..radius).map(move |z| (x, z)))
+                .collect();
 
-            for x in -radius..radius {
-                for z in -radius..radius {
+            tuples
+                .into_par_iter()
+                .flat_map(|(x, z)| {
                     let noise = noise.get_noise(x as f32 / NOISE_SCALE, z as f32 / NOISE_SCALE);
 
                     let height = ((noise + 0.7) * input_height as f32).ceil() as i32;
 
-                    for y in 0..=height {
+                    (0..=height).into_par_iter().map(move |y| {
                         let block_type = if y > input_height - 3 {
                             BlockType::Snow
                         } else if y > input_height / 2 {
@@ -99,12 +96,10 @@ pub fn test_scene(args: &Args) -> HashMap<IVec3, BlockType> {
                             BlockType::Stone
                         };
 
-                        blocks.insert(ivec3(x, y, z), block_type);
-                    }
-                }
-            }
-
-            blocks
+                        (ivec3(x, y, z), block_type)
+                    })
+                })
+                .collect()
         }
     };
 

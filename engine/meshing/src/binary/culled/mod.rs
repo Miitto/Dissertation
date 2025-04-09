@@ -182,6 +182,10 @@ impl Renderable for ChunkManager {
             render_seperate(self, state);
         }
     }
+
+    fn cull(&mut self, cell: bool) {}
+
+    fn combine(&mut self, combine: bool) {}
 }
 
 fn render_seperate(manager: &mut ChunkManager, state: &mut renderer::State) {

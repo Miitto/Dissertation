@@ -2,7 +2,7 @@ pub mod tests;
 
 pub use clap::Parser;
 use tests::{Scene, Test};
-#[derive(clap::Parser, Debug)]
+#[derive(clap::Parser, Debug, Clone, Copy)]
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// Scene to use
@@ -18,7 +18,7 @@ pub struct Args {
     pub radius: i32,
 
     /// Height
-    #[arg(short, long, default_value = "8")]
+    #[arg(short, long, default_value = "20")]
     pub depth: i32,
 
     /// Frustum Culling
@@ -28,7 +28,52 @@ pub struct Args {
     /// Combine Draw calls using SSBO
     #[arg(short, long, default_value = "false")]
     pub combine: bool,
+
+    /// Profile
+    #[arg(short, long, default_value = "false")]
+    pub profile: bool,
+
+    /// Auto test
+    #[arg(short, long, default_value = "false")]
+    pub auto_test: bool,
 }
+
+impl Args {
+    pub const fn default() -> Self {
+        Self {
+            scene: Scene::Single,
+            test: Test::Basic,
+            radius: 8,
+            depth: 20,
+            frustum_cull: false,
+            combine: false,
+            profile: false,
+            auto_test: false,
+        }
+    }
+}
+
+impl std::fmt::Display for Args {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let radius = if self.scene == Scene::Perlin {
+            format!(" {}", self.radius)
+        } else {
+            String::new()
+        };
+        let mut flags = String::new();
+        if self.frustum_cull || self.combine {
+            flags.push(' ');
+        }
+        if self.frustum_cull {
+            flags.push_str("F");
+        }
+        if self.combine {
+            flags.push_str("C");
+        }
+        write!(f, "{:?}{}, {:?}{}", self.scene, radius, self.test, flags)
+    }
+}
+
 use glam::{IVec3, Vec3, ivec3, vec3};
 use renderer::{Dir, camera::Camera};
 
@@ -245,6 +290,7 @@ pub fn get_looked_at_block(
     camera: &dyn Camera,
     get_block_fn: impl Fn(&IVec3) -> BlockType,
 ) -> Option<IVec3> {
+    return None;
     renderer::profiler::event!("Greedy Get Looked At Block");
 
     //http://www.cse.yorku.ca/~amana/research/grid.pdf

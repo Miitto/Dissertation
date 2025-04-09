@@ -1,10 +1,28 @@
+use std::ops::Deref;
+
 use super::{Buffer, BufferError, BufferMode, Mapping, RawBuffer};
+
+#[derive(Debug, Clone, Copy)]
+pub struct MappingAddr {
+    pub ptr: *mut std::os::raw::c_void,
+}
+
+impl Deref for MappingAddr {
+    type Target = *mut std::os::raw::c_void;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ptr
+    }
+}
+
+unsafe impl Send for MappingAddr {}
+unsafe impl Sync for MappingAddr {}
 
 pub struct GpuBuffer {
     id: gl::types::GLuint,
     count: usize,
     size: usize,
-    mapping: Option<*mut std::os::raw::c_void>,
+    mapping: Option<MappingAddr>,
     mode: BufferMode,
 }
 
@@ -66,7 +84,7 @@ impl GpuBuffer {
             None
         };
 
-        self.mapping = mapping;
+        self.mapping = mapping.map(|ptr| MappingAddr { ptr });
 
         Ok(self)
     }
@@ -252,7 +270,7 @@ impl RawBuffer for GpuBuffer {
         Ok(())
     }
 
-    fn raw_mapping(&self) -> Option<*mut std::os::raw::c_void> {
+    fn raw_mapping(&self) -> Option<MappingAddr> {
         self.mapping
     }
 

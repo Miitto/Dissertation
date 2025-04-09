@@ -57,7 +57,7 @@ pub trait RawBuffer: Buffer {
         dst_offset: usize,
         size: usize,
     ) -> Result<(), BufferError>;
-    fn raw_mapping(&self) -> Option<*mut std::os::raw::c_void>;
+    fn raw_mapping(&self) -> Option<MappingAddr>;
     fn get_mapping<'a>(&'a mut self) -> Mapping<'a, Self>;
     fn on_map_flush(&mut self);
 }

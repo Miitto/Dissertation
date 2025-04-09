@@ -18,11 +18,11 @@ struct FlatManager {
 pub fn setup(args: &Args, state: &State) -> Box<dyn Renderable> {
     let data = test_scene(args);
 
-    let min = data.keys().fold(IVec3::MAX, |acc, &pos| {
+    let min = data.iter().map(|e| *e.key()).fold(IVec3::MAX, |acc, pos| {
         ivec3(acc.x.min(pos.x), acc.y.min(pos.y), acc.z.min(pos.z))
     });
 
-    let max = data.keys().fold(IVec3::MIN, |acc, &pos| {
+    let max = data.iter().map(|e| *e.key()).fold(IVec3::MIN, |acc, pos| {
         ivec3(acc.x.max(pos.x), acc.y.max(pos.y), acc.z.max(pos.z))
     });
 
@@ -72,6 +72,14 @@ impl Renderable for FlatManager {
         compuse.dispatch(self.screen.resolution.x, self.screen.resolution.y, 1);
 
         self.screen.post_render();
+    }
+
+    fn cull(&mut self, _cull: bool) {
+        // No culling needed for flat rendering
+    }
+
+    fn combine(&mut self, _combine: bool) {
+        // No combining needed for flat rendering
     }
 }
 
