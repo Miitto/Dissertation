@@ -11,14 +11,21 @@ pub struct GpuBuffer {
 impl GpuBuffer {
     pub fn reallocate_with_size(&mut self, size: usize) -> Result<(), BufferError> {
         println!("Reallocating GpuBuffer");
-        unsafe {
-            gl::DeleteBuffers(1, &self.id);
-        }
+        let old_size = self.size;
+        let old_id = self.id;
 
         self.size = size;
         self.id = 0;
 
         self.create_with(std::ptr::null())?;
+
+        unsafe {
+            gl::CopyNamedBufferSubData(old_id, self.id, 0, 0, old_size as isize);
+        }
+
+        unsafe {
+            gl::DeleteBuffers(1, &old_id);
+        }
 
         Ok(())
     }
