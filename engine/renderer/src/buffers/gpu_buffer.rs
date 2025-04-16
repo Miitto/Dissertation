@@ -1,13 +1,15 @@
-use std::ops::Deref;
+use std::{
+    ops::Deref,
+    sync::{Arc, Mutex},
+};
 
 use super::{Buffer, BufferError, BufferMode, Mapping, RawBuffer};
 
-#[derive(Debug, Clone, Copy)]
-pub struct MappingAddr {
-    pub ptr: *mut std::os::raw::c_void,
+pub struct Pointer<T> {
+    pub ptr: *mut T,
 }
 
-impl Deref for MappingAddr {
+impl Deref for Pointer<std::os::raw::c_void> {
     type Target = *mut std::os::raw::c_void;
 
     fn deref(&self) -> &Self::Target {
@@ -15,8 +17,20 @@ impl Deref for MappingAddr {
     }
 }
 
-unsafe impl Send for MappingAddr {}
-unsafe impl Sync for MappingAddr {}
+unsafe impl Send for Pointer<std::os::raw::c_void> {}
+
+#[derive(Clone)]
+pub struct MappingAddr {
+    pub ptr: Arc<Mutex<Pointer<std::os::raw::c_void>>>,
+}
+
+impl Deref for MappingAddr {
+    type Target = Arc<Mutex<Pointer<std::os::raw::c_void>>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ptr
+    }
+}
 
 pub struct GpuBuffer {
     id: gl::types::GLuint,
@@ -53,10 +67,9 @@ impl GpuBuffer {
         data: *const std::os::raw::c_void,
     ) -> std::result::Result<&mut Self, BufferError> {
         crate::profiler::event!("Creating buffer");
-        // println!(
-        //     "Creating Buffer with size {} and length: {}",
-        //     self.size, self.count
-        // );
+        if self.size == 0 {
+            return Ok(self);
+        }
         unsafe {
             gl::CreateBuffers(1, &mut self.id);
             gl::NamedBufferStorage(
@@ -84,7 +97,9 @@ impl GpuBuffer {
             None
         };
 
-        self.mapping = mapping.map(|ptr| MappingAddr { ptr });
+        self.mapping = mapping.map(|ptr| MappingAddr {
+            ptr: Arc::new(Mutex::new(Pointer { ptr })),
+        });
 
         Ok(self)
     }
@@ -271,14 +286,14 @@ impl RawBuffer for GpuBuffer {
     }
 
     fn raw_mapping(&self) -> Option<MappingAddr> {
-        self.mapping
+        self.mapping.clone()
     }
 
     fn get_mapping<'a>(&'a mut self) -> super::Mapping<'a, GpuBuffer> {
-        if let Some(mapping) = self.mapping {
+        if let Some(ref mapping) = self.mapping {
             Mapping::new(
                 self,
-                mapping,
+                mapping.clone(),
                 self.size,
                 matches!(self.buf_mode(), BufferMode::PersistentCoherent),
             )

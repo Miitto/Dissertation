@@ -1,7 +1,9 @@
-use std::{cell::RefCell, collections::HashMap};
+use rayon::prelude::*;
 
-use chunk::Chunk;
+pub use chunk::Chunk;
+use dashmap::DashMap;
 use glam::{IVec3, Mat4, ivec3, vec3};
+use rayon::iter::IntoParallelRefIterator;
 use renderer::{
     DrawMode, ProgramSource, Renderable, SSBO, State,
     bounds::{BoundingHeirarchy, BoundingVolume},
@@ -16,82 +18,95 @@ use voxel::{
     culled_voxel_combined::{self, buffers::ChunkData},
 };
 
-use common::{Args, BlockType, get_looked_at_block, seperate_global_pos, tests::test_scene};
+use common::{
+    Args, BlockType, get_looked_at_block, seperate_global_pos,
+    tests::{Test, test_scene},
+};
 
 mod chunk;
 mod voxel;
+
+pub fn chunk_data(data: &DashMap<IVec3, BlockType>, args: &Args, chunks: &DashMap<IVec3, Chunk>) {
+    data.into_par_iter().for_each(|e| {
+        let (pos, block) = e.pair();
+        let (chunk_pos, in_chunk_pos) = seperate_global_pos(pos);
+
+        let chunk = chunks.entry(chunk_pos).or_insert(Chunk::fill(
+            BlockType::Air,
+            !args.combine,
+            args.test == Test::Greedy,
+            args.frustum_cull,
+        ));
+
+        chunk.set(in_chunk_pos, *block);
+    });
+}
+
+pub fn mesh_chunks(chunks: &DashMap<IVec3, Chunk>) {
+    chunks.par_iter().for_each(|e| {
+        let position = e.key();
+        let chunk = e.value();
+        let pos = vec3(position[0] as f32, position[1] as f32, position[2] as f32) * 32.0;
+        let end_pos = pos + 32.0;
+
+        chunk.update(position, chunks);
+        chunk.update_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
+    });
+}
 
 pub fn setup(args: &Args, _state: &State) -> ChunkManager {
     let mut manager = ChunkManager::new(args.combine, args.frustum_cull);
 
     let data = test_scene(args);
 
-    for (pos, block) in data {
-        let (chunk_pos, in_chunk_pos) = seperate_global_pos(&pos);
+    chunk_data(&data, args, &manager.chunks);
 
-        let chunk = manager
-            .chunks
-            .entry(chunk_pos)
-            .or_insert(RefCell::new(Chunk::fill(
-                BlockType::Air,
-                !args.combine,
-                args.frustum_cull,
-            )));
+    let instance_data = setup_chunks(&mut manager);
 
-        chunk.borrow_mut().set(in_chunk_pos, block);
-    }
-    let instance_data = setup_chunks(&manager.chunks, manager.combined.as_mut());
-
-    if let Some(combined) = &mut manager.combined {
-        if let Err(e) = combined.mesh.set_instances(&instance_data) {
-            eprintln!("Failed to set combined greedy instances: {:?}", e);
-        }
+    if let Err(e) = manager.combined.mesh.set_instances(&instance_data) {
+        eprintln!("Failed to set combined greedy instances: {:?}", e);
     }
 
     manager
 }
 
-fn setup_chunks(
-    chunks: &HashMap<IVec3, RefCell<Chunk>>,
-    mut combined: Option<&mut CombinedInstanceData>,
-) -> Vec<culled_voxel_combined::Instance> {
+fn setup_chunks(manager: &mut ChunkManager) -> Vec<culled_voxel_combined::Instance> {
     let mut instance_data: Vec<culled_voxel_combined::Instance> = vec![];
 
-    if let Some(c) = combined.as_mut() {
-        c.pos_order.clear()
-    }
+    manager.combined.pos_order.clear();
 
-    for (position, chunk) in chunks.iter() {
-        let pos = vec3(position[0] as f32, position[1] as f32, position[2] as f32) * 32.0;
-        let end_pos = pos + 32.0;
+    mesh_chunks(&manager.chunks);
 
-        chunk.borrow_mut().update(position, chunks);
-        chunk
-            .borrow_mut()
-            .update_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
+    // Need another loop as we can't flush the buffer from another thread since the OpenGL context
+    // is current on the main thread
+    manager.chunks.iter().for_each(|e| {
+        e.value().write_mesh();
+    });
 
-        if let Some(combined) = &mut combined {
-            let order = &mut combined.pos_order;
+    for e in manager.chunks.iter() {
+        let position = e.key();
+        let chunk = e.value();
 
-            let borrow = chunk.borrow();
-            let instances = borrow.instances();
+        let order = &mut manager.combined.pos_order;
 
-            instance_data.extend(
-                instances
-                    .iter()
-                    .map(|i| culled_voxel_combined::Instance { data: i.data }),
-            );
-            order.push((*position, instances.len()));
-        }
+        let instances = chunk.instances().read().unwrap();
+
+        instance_data.extend(
+            instances
+                .iter()
+                .map(|i| culled_voxel_combined::Instance { data: i.data }),
+        );
+        order.push((*position, instances.len()));
     }
 
     instance_data
 }
 
 pub struct ChunkManager {
-    chunks: HashMap<IVec3, RefCell<chunk::Chunk>>,
-    combined: Option<CombinedInstanceData>,
+    chunks: DashMap<IVec3, chunk::Chunk>,
+    combined: CombinedInstanceData,
     outline_mesh: BasicMesh<renderer::draw::line::Vertex>,
+    combine: bool,
     frustum_cull: bool,
 }
 
@@ -111,23 +126,26 @@ impl ChunkManager {
             culled_voxel_combined::Vertex::new([1, 0, 1]),
         ];
 
-        let combined = if combine {
+        let combined = {
+            println!("Creating combined mesh");
             let mesh = NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
                 .expect("Failed to create greedy ChunkManager mesh");
+            println!("Creating chunk data buffer");
+            let chunk_data_buffer =
+                ShaderBuffer::new(&[]).expect("Failed to make shader buffer for chunk positions");
+            println!("Creating indirect buffer");
+            let indirect_buffer = GpuBuffer::empty(
+                std::mem::size_of::<DrawArraysIndirectCommand>() * 100,
+                BufferMode::Persistent,
+            )
+            .expect("Failed to make indirect buffer");
 
-            Some(CombinedInstanceData {
+            CombinedInstanceData {
                 mesh,
                 pos_order: vec![],
-                chunk_data_buffer: ShaderBuffer::new(&[])
-                    .expect("Failed to make shader buffer for chunk positions"),
-                indirect_buffer: GpuBuffer::empty(
-                    std::mem::size_of::<DrawArraysIndirectCommand>() * 100,
-                    BufferMode::Persistent,
-                )
-                .expect("Failed to make indirect buffer"),
-            })
-        } else {
-            None
+                chunk_data_buffer,
+                indirect_buffer,
+            }
         };
 
         let outline_color = vec3(0.0, 0.0, 0.0);
@@ -154,10 +172,11 @@ impl ChunkManager {
             BasicMesh::from_data(&outlines, None, None, None, false, false, DrawMode::Lines);
 
         Self {
-            chunks: HashMap::new(),
+            chunks: DashMap::new(),
             combined,
             outline_mesh,
             frustum_cull,
+            combine,
         }
     }
     pub fn get_block_at(&self, pos: &IVec3) -> BlockType {
@@ -169,33 +188,50 @@ impl ChunkManager {
             return BlockType::Air;
         };
 
-        chunk.borrow().get(in_chunk_pos)
+        chunk.get(
+            in_chunk_pos.x as usize,
+            in_chunk_pos.y as usize,
+            in_chunk_pos.z as usize,
+        )
     }
 }
 
 impl Renderable for ChunkManager {
     fn render(&mut self, state: &mut renderer::State) {
         renderer::profiler::event!("Greedy Render");
-        if self.combined.is_some() {
+        if self.combine {
             render_combined(self, state);
         } else {
             render_seperate(self, state);
         }
     }
 
-    fn cull(&mut self, cell: bool) {}
+    fn cull(&mut self, cull: bool) {
+        self.frustum_cull = cull;
+        for e in self.chunks.iter() {
+            e.value().set_frustum_culling(cull);
+        }
+    }
 
-    fn combine(&mut self, combine: bool) {}
+    fn combine(&mut self, combine: bool) {
+        self.combine = combine;
+    }
 }
 
 fn render_seperate(manager: &mut ChunkManager, state: &mut renderer::State) {
-    for (pos, chunk) in manager.chunks.iter() {
+    manager.chunks.par_iter().for_each(|e| {
+        let chunk = e.value();
+        chunk.update(e.key(), &manager.chunks);
+    });
+    for e in manager.chunks.iter() {
+        let pos = e.key();
+        let chunk = e.value();
         let ipos = ivec3(pos[0], pos[1], pos[2]) * 32;
 
-        let mut borrow = chunk.borrow_mut();
-        borrow.update(pos, &manager.chunks);
+        chunk.write_mesh();
 
-        let mesh = borrow.mesh().expect("Chunk should of had a mesh");
+        let mut mesh = chunk.mesh().write().unwrap();
+        let mesh = mesh.as_mut().expect("Chunk should of had a mesh");
 
         let uniforms = culled_voxel::Uniforms {
             chunk_position: ipos.to_array(),
@@ -210,29 +246,29 @@ fn render_seperate(manager: &mut ChunkManager, state: &mut renderer::State) {
 fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
     renderer::profiler::event!("Greedy Render Combined");
     let frustum = &state.cameras.game_frustum();
-    let combined = manager
-        .combined
-        .as_mut()
-        .expect("Manager should of had combined");
 
-    combined.mesh.bind();
+    manager.combined.mesh.bind();
     let program = culled_voxel_combined::Program::get();
     program.bind();
 
     if manager
         .chunks
-        .iter()
-        .any(|(p, c)| c.borrow_mut().update(p, &manager.chunks))
+        .par_iter()
+        .any(|e| e.value().update(e.key(), &manager.chunks))
     {
-        let instance_data = setup_chunks(&manager.chunks, Some(combined));
+        let instance_data = setup_chunks(manager);
 
-        if let Err(e) = combined.mesh.set_instances(instance_data.as_slice()) {
+        if let Err(e) = manager
+            .combined
+            .mesh
+            .set_instances(instance_data.as_slice())
+        {
             eprintln!("Failed to set combined greedy instances: {:?}", e);
         }
     }
 
     fn setup_multidraw(
-        chunks: &HashMap<IVec3, RefCell<Chunk>>,
+        chunks: &DashMap<IVec3, Chunk>,
         combined: &CombinedInstanceData,
         frustum: &Frustum,
         cull: bool,
@@ -252,7 +288,7 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
                 continue;
             };
 
-            if cull && chunk.borrow().bounds().intersects(frustum).is_none() {
+            if cull && chunk.bounds().intersects(frustum).is_none() {
                 instance += *count as u32;
                 continue;
             }
@@ -276,8 +312,12 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
         (chunk_data, draw_params)
     }
 
-    let (uniforms, draw_params) =
-        setup_multidraw(&manager.chunks, combined, frustum, manager.frustum_cull);
+    let (uniforms, draw_params) = setup_multidraw(
+        &manager.chunks,
+        &manager.combined,
+        frustum,
+        manager.frustum_cull,
+    );
 
     fn set_chunk_data(chunk_data: ChunkData, combined: &mut CombinedInstanceData) {
         renderer::profiler::event!("Greedy set combined chunk data");
@@ -285,8 +325,8 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
             eprintln!("Error setting chunk data: {:?}", e);
         }
     }
-    set_chunk_data(uniforms, combined);
-    combined.chunk_data_buffer.bind();
+    set_chunk_data(uniforms, &mut manager.combined);
+    manager.combined.chunk_data_buffer.bind();
 
     fn set_indirect_commands(
         draw_params: Vec<DrawArraysIndirectCommand>,
@@ -299,10 +339,13 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
     }
 
     let len = draw_params.len() as i32;
-    set_indirect_commands(draw_params, combined);
+    set_indirect_commands(draw_params, &mut manager.combined);
 
     unsafe {
-        gl::BindBuffer(gl::DRAW_INDIRECT_BUFFER, combined.indirect_buffer.id());
+        gl::BindBuffer(
+            gl::DRAW_INDIRECT_BUFFER,
+            manager.combined.indirect_buffer.id(),
+        );
     }
 
     fn draw_combined(len: i32) {
@@ -356,7 +399,7 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
 
         if state.is_clicked(winit::event::MouseButton::Left) {
             if let Some(chunk) = manager.chunks.get_mut(&chunk_pos) {
-                chunk.borrow_mut().set(in_chunk_pos, BlockType::Air);
+                chunk.set(in_chunk_pos, BlockType::Air);
             }
         }
     }

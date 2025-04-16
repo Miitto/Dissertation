@@ -39,7 +39,9 @@ impl<'a, B: RawBuffer> Mapping<'a, B> {
             self.size
         );
 
-        unsafe { std::ptr::copy_nonoverlapping(src, self.ptr.ptr.add(offset) as *mut u8, size) }
+        let dst = self.ptr.lock().unwrap();
+
+        unsafe { std::ptr::copy_nonoverlapping(src, dst.add(offset) as *mut u8, size) }
 
         if !self.coherant {
             self.needs_flush = true;

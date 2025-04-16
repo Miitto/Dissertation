@@ -118,11 +118,7 @@ const TESTS: [Args; 77] = [
 fn setup_test(app: &mut App) {
     app.setup = Some(match app.args.test {
         Test::Tri => meshing::setup(),
-        Test::Greedy => Box::new(meshing::binary::greedy::setup(
-            &app.args,
-            app.state.as_ref().unwrap(),
-        )) as Box<dyn Renderable>,
-        Test::Culled => Box::new(meshing::binary::culled::setup(
+        Test::Culled | Test::Greedy => Box::new(meshing::binary::culled::setup(
             &app.args,
             app.state.as_ref().unwrap(),
         )) as Box<dyn Renderable>,
