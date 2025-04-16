@@ -6,7 +6,7 @@ use renderer::{Axis, Dir};
 use common::BlockType;
 
 const CHUNK_SIZE_P: usize = 34;
-const CHUNK_SIZE: usize = 32;
+pub const CHUNK_SIZE: usize = 32;
 
 type AxisDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]>;
 type FaceDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]>;

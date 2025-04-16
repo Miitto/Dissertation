@@ -1,14 +1,14 @@
 use std::sync::RwLock;
 
 use dashmap::DashMap;
-use glam::IVec3;
+use glam::{IVec3, ivec3};
 use renderer::{
     Dir, DrawMode,
     bounds::BoundingHeirarchy,
     mesh::{Mesh, ninstanced::NInstancedMesh},
 };
 
-use crate::binary::common::{CHUNK_SIZE, make_faces};
+use crate::binary::common::{CHUNK_SIZE, make_culled_faces, make_greedy_faces};
 use common::{BasicVoxel, BlockType, InstanceData, Voxel};
 
 use super::voxel::culled_voxel;
@@ -110,16 +110,89 @@ impl Chunk {
         }
     }
 
+    pub fn get_at(
+        &self,
+        x: isize,
+        y: isize,
+        z: isize,
+        pos: &IVec3,
+        chunks: &DashMap<IVec3, Self>,
+    ) -> BlockType {
+        if (0..CHUNK_SIZE as isize).contains(&x)
+            && (0..CHUNK_SIZE as isize).contains(&y)
+            && (0..CHUNK_SIZE as isize).contains(&z)
+        {
+            return self.voxels.read().unwrap()[x as usize][y as usize][z as usize].get_type();
+        }
+
+        let chunk_x_offset = if x < 0 {
+            -1
+        } else if x >= CHUNK_SIZE as isize {
+            1
+        } else {
+            0
+        };
+        let chunk_y_offset = if y < 0 {
+            -1
+        } else if y >= CHUNK_SIZE as isize {
+            1
+        } else {
+            0
+        };
+        let chunk_z_offset = if z < 0 {
+            -1
+        } else if z >= CHUNK_SIZE as isize {
+            1
+        } else {
+            0
+        };
+
+        let chunk_pos = pos + ivec3(chunk_x_offset, chunk_y_offset, chunk_z_offset);
+
+        let chunk = if let Some(chunk) = chunks.get(&chunk_pos) {
+            chunk
+        } else {
+            return BlockType::Air;
+        };
+
+        let x_pos = if x < 0 {
+            CHUNK_SIZE - 1
+        } else if x >= CHUNK_SIZE as isize {
+            0
+        } else {
+            x as usize
+        };
+        let y_pos = if y < 0 {
+            CHUNK_SIZE - 1
+        } else if y >= CHUNK_SIZE as isize {
+            0
+        } else {
+            y as usize
+        };
+        let z_pos = if z < 0 {
+            CHUNK_SIZE - 1
+        } else if z >= CHUNK_SIZE as isize {
+            0
+        } else {
+            z as usize
+        };
+
+        chunk.voxels.read().unwrap()[x_pos][y_pos][z_pos].get_type()
+    }
+
     pub fn update(&self, position: &IVec3, chunks: &DashMap<IVec3, Self>) -> bool {
         if !*self.needs_update.read().unwrap() {
             return false;
         }
 
-        let raw_faces = make_faces(
-            chunks,
-            position,
-            *self.greedy.read().expect("Failed to read greedy"),
-        );
+        let get_fn =
+            |x: isize, y: isize, z: isize| -> BlockType { self.get_at(x, y, z, position, chunks) };
+
+        let raw_faces = if *self.greedy.read().unwrap() {
+            make_greedy_faces(get_fn)
+        } else {
+            make_culled_faces(get_fn)
+        };
 
         let mut instances = self.instances.write().unwrap();
         instances.clear();
