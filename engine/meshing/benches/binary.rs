@@ -1,30 +1,47 @@
-use std::{cell::RefCell, hint::black_box};
+use std::hint::black_box;
 
 use common::{
-    Args, BlockType, seperate_global_pos,
+    Args, BasicVoxel, BlockType,
     tests::{Scene, Test, test_scene},
 };
 use criterion::{Criterion, criterion_group, criterion_main};
 
-use dashmap::{DashMap, iter::Iter};
-use glam::IVec3;
+use dashmap::DashMap;
 use meshing::binary::{
     common::*,
-    culled::{Chunk, chunk_data, mesh_chunks},
+    culled::{chunk_data, mesh_chunks},
 };
 
 pub fn culled(c: &mut Criterion) {
-    let empty_fn = |_x: isize, _y: isize, _z: isize| -> BlockType { BlockType::Air };
+    let blank_voxels = [[[BasicVoxel::new(BlockType::Air); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+    let refs = ChunkRefs {
+        chunk: &blank_voxels,
+        x_neg: &blank_voxels,
+        x_pos: &blank_voxels,
+        y_neg: &blank_voxels,
+        y_pos: &blank_voxels,
+        z_neg: &blank_voxels,
+        z_pos: &blank_voxels,
+    };
     c.bench_function("Empty", |b| {
         b.iter(|| {
-            make_culled_faces(black_box(empty_fn));
+            make_culled_faces(black_box(&refs));
         })
     });
 
-    let full_fn = |_x: isize, _y: isize, _z: isize| -> BlockType { BlockType::Grass };
+    let full_voxels = [[[BasicVoxel::new(BlockType::Grass); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+    let refs = ChunkRefs {
+        chunk: &full_voxels,
+        x_neg: &full_voxels,
+        x_pos: &full_voxels,
+        y_neg: &full_voxels,
+        y_pos: &full_voxels,
+        z_neg: &full_voxels,
+        z_pos: &full_voxels,
+    };
     c.bench_function("Full", |b| {
         b.iter(|| {
-            make_culled_faces(black_box(full_fn));
+            make_culled_faces(black_box(&refs));
         })
     });
 
@@ -33,49 +50,6 @@ pub fn culled(c: &mut Criterion) {
     args.test = Test::Culled;
 
     let blocks = test_scene(&args);
-    let chunks = DashMap::new();
-
-    chunk_data(&blocks, &args, &chunks);
-
-    let mut chunk_iter = chunks.iter();
-
-    let mut next_item = || {
-        if let Some(e) = chunk_iter.next() {
-            e
-        } else {
-            chunk_iter = chunks.iter();
-            chunk_iter.next().unwrap()
-        }
-    };
-
-    c.bench_function("Get fn", |b| {
-        let e = next_item();
-        let pos = e.key();
-        let chunk = e.value();
-        let perlin_fn =
-            |x: isize, y: isize, z: isize| -> BlockType { chunk.get_at(x, y, z, pos, &chunks) };
-        b.iter(|| {
-            for x in -1..=32 {
-                for y in -1..=32 {
-                    for z in -1..=32 {
-                        let _ = perlin_fn(black_box(x), black_box(y), black_box(z));
-                    }
-                }
-            }
-        })
-    });
-
-    c.bench_function("Perlin", |b| {
-        let e = next_item();
-        let pos = e.key();
-        let chunk = e.value();
-
-        let perlin_fn =
-            |x: isize, y: isize, z: isize| -> BlockType { chunk.get_at(x, y, z, pos, &chunks) };
-        b.iter(|| {
-            make_culled_faces(black_box(perlin_fn));
-        })
-    });
 
     c.bench_function("Blocks to Chunks", |b| {
         b.iter(|| {

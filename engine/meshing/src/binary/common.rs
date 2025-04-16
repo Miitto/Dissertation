@@ -1,13 +1,17 @@
 use std::collections::HashMap;
 
-use glam::ivec3;
+use dashmap::DashMap;
+use glam::IVec3;
 use renderer::{Axis, Dir};
 
-use common::BlockType;
+use common::{BasicVoxel, BlockType, Voxel};
 
-const CHUNK_SIZE_P: usize = 34;
-const CHUNK_SIZE: usize = 32;
+use super::culled::Chunk;
 
+const CHUNK_SIZE_P: usize = 32;
+pub const CHUNK_SIZE: usize = 30;
+
+type VoxelRefs = [[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
 type AxisDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]>;
 type FaceDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]>;
 type TransformedBlockDepths = [HashMap<BlockType, Box<[[u32; CHUNK_SIZE]; CHUNK_SIZE]>>; 6];
@@ -23,35 +27,109 @@ pub struct GreedyFace {
     pub block_type: BlockType,
 }
 
-pub fn make_culled_faces<F>(get_fn: F) -> Vec<Vec<GreedyFace>>
-where
-    F: Fn(isize, isize, isize) -> BlockType,
-{
-    let depths = build_depths(&get_fn);
+pub struct ChunkRefs<'a> {
+    pub chunk: &'a VoxelRefs,
+    pub x_pos: &'a VoxelRefs,
+    pub y_pos: &'a VoxelRefs,
+    pub z_pos: &'a VoxelRefs,
+    pub x_neg: &'a VoxelRefs,
+    pub y_neg: &'a VoxelRefs,
+    pub z_neg: &'a VoxelRefs,
+}
+
+pub fn make_faces(
+    chunks: &DashMap<IVec3, Chunk>,
+    position: &IVec3,
+    greedy: bool,
+) -> Vec<Vec<GreedyFace>> {
+    let blank_voxels = [[[BasicVoxel::new(BlockType::Air); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+    macro_rules! get_chunk {
+        ($chunk_name:ident, $block_name:ident,$pos:expr) => {
+            let $chunk_name = chunks.get($pos);
+            let $chunk_name = if let Some(ref chunk) = $chunk_name {
+                let voxels = chunk.voxels();
+                let read = voxels.read().expect("Failed to read blocks");
+
+                Some((chunk, voxels, read))
+            } else {
+                None
+            };
+            let $block_name = if let Some(ref read) = $chunk_name {
+                let read = &read.2;
+                read.as_ref()
+            } else {
+                &blank_voxels
+            };
+        };
+    }
+    get_chunk!(chunk_center, blocks_center, position);
+    get_chunk!(
+        chunk_x_neg,
+        blocks_x_neg,
+        &IVec3::new(position.x - 1, position.y, position.z)
+    );
+    get_chunk!(
+        chunk_y_neg,
+        blocks_y_neg,
+        &IVec3::new(position.x, position.y - 1, position.z)
+    );
+    get_chunk!(
+        chunk_z_neg,
+        blocks_z_neg,
+        &IVec3::new(position.x, position.y, position.z - 1)
+    );
+    get_chunk!(
+        chunk_x_pos,
+        blocks_x_pos,
+        &IVec3::new(position.x + 1, position.y, position.z)
+    );
+    get_chunk!(
+        chunk_y_pos,
+        blocks_y_pos,
+        &IVec3::new(position.x, position.y + 1, position.z)
+    );
+    get_chunk!(
+        chunk_z_pos,
+        blocks_z_pos,
+        &IVec3::new(position.x, position.y, position.z + 1)
+    );
+
+    let refs = ChunkRefs {
+        chunk: blocks_center,
+        x_pos: blocks_x_pos,
+        y_pos: blocks_y_pos,
+        z_pos: blocks_z_pos,
+        x_neg: blocks_x_neg,
+        y_neg: blocks_y_neg,
+        z_neg: blocks_z_neg,
+    };
+
+    if greedy {
+        make_greedy_faces(&refs)
+    } else {
+        make_culled_faces(&refs)
+    }
+}
+
+pub fn make_culled_faces(refs: &ChunkRefs) -> Vec<Vec<GreedyFace>> {
+    let depths = build_depths(refs);
     let culled = cull_depths(depths);
-    let block_faces = depths_to_faces(culled, get_fn);
+    let block_faces = depths_to_faces(culled, refs);
 
     culled_faces(block_faces)
 }
 
-pub fn make_greedy_faces<F>(get_fn: F) -> GreedyFaces
-where
-    F: Fn(isize, isize, isize) -> BlockType,
-{
-    let depths = build_depths(&get_fn);
+pub fn make_greedy_faces(chunks: &ChunkRefs) -> GreedyFaces {
+    let depths = build_depths(chunks);
     let culled = cull_depths(depths);
-
-    let block_faces = depths_to_faces(culled, get_fn);
+    let block_faces = depths_to_faces(culled, chunks);
 
     greedy_faces(block_faces)
 }
 
 /// Build a depth mask for each axis.
 /// Each integer is a view along the depth of that axis.
-pub fn build_depths<F>(get_fn: F) -> AxisDepths
-where
-    F: Fn(isize, isize, isize) -> BlockType,
-{
+pub fn build_depths(chunks: &ChunkRefs) -> AxisDepths {
     let mut depths = Box::new([[[0; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]);
 
     #[inline]
@@ -72,40 +150,58 @@ where
     for z in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                let v = get_fn(x as isize, y as isize, z as isize);
+                let v = chunks.chunk[x][y][z];
                 // Add One to compensate for padding
-                add_voxel(v.is_solid(), x + 1, y + 1, z + 1, &mut depths);
+                add_voxel(v.get_type().is_solid(), x + 1, y + 1, z + 1, &mut depths);
             }
         }
     }
 
     for z in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
-            let min = get_fn(-1, y as isize, z as isize);
-            let max = get_fn(CHUNK_SIZE as isize, y as isize, z as isize);
+            let min = chunks.x_pos[0][y][z];
+            let max = chunks.x_neg[CHUNK_SIZE - 1][y][z];
 
-            add_voxel(min.is_solid(), 0, y + 1, z + 1, &mut depths);
-            add_voxel(max.is_solid(), CHUNK_SIZE + 1, y + 1, z + 1, &mut depths);
+            add_voxel(min.get_type().is_solid(), 0, y + 1, z + 1, &mut depths);
+            add_voxel(
+                max.get_type().is_solid(),
+                CHUNK_SIZE + 1,
+                y + 1,
+                z + 1,
+                &mut depths,
+            );
         }
     }
 
     for x in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
-            let min = get_fn(x as isize, y as isize, -1);
-            let max = get_fn(x as isize, y as isize, CHUNK_SIZE as isize);
+            let min = chunks.z_pos[x][y][0];
+            let max = chunks.z_neg[x][y][CHUNK_SIZE - 1];
 
-            add_voxel(min.is_solid(), x + 1, y + 1, 0, &mut depths);
-            add_voxel(max.is_solid(), x + 1, y + 1, CHUNK_SIZE + 1, &mut depths);
+            add_voxel(min.get_type().is_solid(), x + 1, y + 1, 0, &mut depths);
+            add_voxel(
+                max.get_type().is_solid(),
+                x + 1,
+                y + 1,
+                CHUNK_SIZE + 1,
+                &mut depths,
+            );
         }
     }
 
-    for x in 0..CHUNK_SIZE {
-        for z in 0..CHUNK_SIZE {
-            let min = get_fn(x as isize, -1, z as isize);
-            let max = get_fn(x as isize, CHUNK_SIZE as isize, z as isize);
+    for z in 0..CHUNK_SIZE {
+        for x in 0..CHUNK_SIZE {
+            let min = chunks.y_pos[x][0][z];
+            let max = chunks.y_neg[x][CHUNK_SIZE - 1][z];
 
-            add_voxel(min.is_solid(), x + 1, 0, z + 1, &mut depths);
-            add_voxel(max.is_solid(), x + 1, CHUNK_SIZE + 1, z + 1, &mut depths);
+            add_voxel(min.get_type().is_solid(), x + 1, 0, z + 1, &mut depths);
+            add_voxel(
+                max.get_type().is_solid(),
+                x + 1,
+                CHUNK_SIZE + 1,
+                z + 1,
+                &mut depths,
+            );
         }
     }
 
@@ -141,10 +237,7 @@ pub fn cull_depths(depths: AxisDepths) -> FaceDepths {
 }
 
 /// Transform depth from going along the integer, to the horizonal axis (X-Z) going along the integer.
-pub fn depths_to_faces<F>(depths: FaceDepths, get_fn: F) -> TransformedBlockDepths
-where
-    F: Fn(isize, isize, isize) -> BlockType,
-{
+pub fn depths_to_faces(depths: FaceDepths, chunks: &ChunkRefs) -> TransformedBlockDepths {
     let mut faces: TransformedBlockDepths = [
         HashMap::new(),
         HashMap::new(),
@@ -171,13 +264,13 @@ where
                     // so we can get the next
                     col &= col - 1;
 
-                    let pos = match dir {
-                        Dir::Up | Dir::Down => ivec3(x as i32, y as i32, z as i32),
-                        Dir::Left | Dir::Right => ivec3(y as i32, z as i32, x as i32),
-                        Dir::Forward | Dir::Backward => ivec3(x as i32, z as i32, y as i32),
+                    let voxel = match dir {
+                        Dir::Up | Dir::Down => chunks.chunk[x][y][z],
+                        Dir::Left | Dir::Right => chunks.chunk[y][z][x],
+                        Dir::Forward | Dir::Backward => chunks.chunk[x][z][y],
                     };
 
-                    let block_type = get_fn(pos.x as isize, pos.y as isize, pos.z as isize);
+                    let block_type = voxel.get_type();
 
                     let data = faces[usize::from(dir)].entry(block_type).or_default();
                     data[y][x] |= 1 << z;
@@ -205,13 +298,13 @@ pub fn culled_faces(faces: TransformedBlockDepths) -> Vec<Vec<GreedyFace>> {
     culled
 }
 
-pub fn culled_face(face: &[u32; 32], depth: u8, block_type: &BlockType) -> Vec<GreedyFace> {
+pub fn culled_face(face: &[u32; CHUNK_SIZE], depth: u8, block_type: &BlockType) -> Vec<GreedyFace> {
     let mut quads = vec![];
 
     const CS: u32 = CHUNK_SIZE as u32;
 
     (0..face.len()).for_each(|row| {
-        let line = face[row] as u64;
+        let line = face[row];
         if line == 0 {
             return;
         }
@@ -271,7 +364,7 @@ pub fn greedy_face(
     const CS: u32 = CHUNK_SIZE as u32;
 
     for row in 0..face.len() {
-        let line = face[row] as u64;
+        let line = face[row];
         if line == 0 {
             continue;
         }
@@ -286,20 +379,20 @@ pub fn greedy_face(
 
             let h = (line >> y).trailing_ones();
 
-            let h_mask = u64::checked_shl(1, h).map_or(!0, |v| v - 1);
+            let h_mask = u32::checked_shl(1, h).map_or(!0, |v| v - 1);
             let mask = h_mask << y;
 
             let mut w = 1;
 
             while row + w < CHUNK_SIZE {
-                let line = face[row + w] as u64;
+                let line = face[row + w];
                 let next_row = (line >> y) & h_mask;
 
                 if next_row != h_mask {
                     break;
                 }
 
-                face[row + w] &= (!mask) as u32;
+                face[row + w] &= !mask;
 
                 w += 1;
             }

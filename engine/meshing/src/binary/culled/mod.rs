@@ -23,6 +23,8 @@ use common::{
     tests::{Test, test_scene},
 };
 
+use super::common::CHUNK_SIZE;
+
 mod chunk;
 mod voxel;
 
@@ -46,8 +48,9 @@ pub fn mesh_chunks(chunks: &DashMap<IVec3, Chunk>) {
     chunks.par_iter().for_each(|e| {
         let position = e.key();
         let chunk = e.value();
-        let pos = vec3(position[0] as f32, position[1] as f32, position[2] as f32) * 32.0;
-        let end_pos = pos + 32.0;
+        let pos =
+            vec3(position[0] as f32, position[1] as f32, position[2] as f32) * (CHUNK_SIZE as f32);
+        let end_pos = pos + (CHUNK_SIZE as f32);
 
         chunk.update(position, chunks);
         chunk.update_bounds(BoundingHeirarchy::from_min_max(pos, end_pos));
@@ -223,10 +226,11 @@ fn render_seperate(manager: &mut ChunkManager, state: &mut renderer::State) {
         let chunk = e.value();
         chunk.update(e.key(), &manager.chunks);
     });
+
     for e in manager.chunks.iter() {
         let pos = e.key();
         let chunk = e.value();
-        let ipos = ivec3(pos[0], pos[1], pos[2]) * 32;
+        let ipos = ivec3(pos[0], pos[1], pos[2]) * CHUNK_SIZE as i32;
 
         chunk.write_mesh();
 
@@ -293,7 +297,7 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
                 continue;
             }
 
-            let vec = ivec3(pos[0], pos[1], pos[2]) * 32;
+            let vec = ivec3(pos[0], pos[1], pos[2]) * CHUNK_SIZE as i32;
 
             chunk_data.pos.push(vec.to_array());
 
@@ -365,7 +369,7 @@ fn render_combined(manager: &mut ChunkManager, state: &mut renderer::State) {
             chunk_pos[0] as f32,
             chunk_pos[1] as f32,
             chunk_pos[2] as f32,
-        ) * 32.0)
+        ) * CHUNK_SIZE as f32)
             + vec3(
                 in_chunk_pos[0] as f32,
                 in_chunk_pos[1] as f32,

@@ -78,20 +78,21 @@ use glam::{IVec3, Vec3, ivec3, vec3};
 use renderer::{Dir, camera::Camera};
 
 pub fn seperate_global_pos(pos: &IVec3) -> (IVec3, IVec3) {
-    let mut chunk_pos = pos / 32;
-    let mut in_chunk_pos = pos.abs() % 32;
+    const CHUNK_SIZE: i32 = 30;
+    let mut chunk_pos = pos / CHUNK_SIZE;
+    let mut in_chunk_pos = pos.abs() % CHUNK_SIZE;
 
     if pos.x < 0 {
         chunk_pos.x -= 1;
-        in_chunk_pos.x = 31 - in_chunk_pos.x;
+        in_chunk_pos.x = (CHUNK_SIZE - 1) - in_chunk_pos.x;
     }
     if pos.y < 0 {
         chunk_pos.y -= 1;
-        in_chunk_pos.y = 31 - in_chunk_pos.y;
+        in_chunk_pos.y = (CHUNK_SIZE - 1) - in_chunk_pos.y;
     }
     if pos.z < 0 {
         chunk_pos.z -= 1;
-        in_chunk_pos.z = 31 - in_chunk_pos.z;
+        in_chunk_pos.z = (CHUNK_SIZE - 1) - in_chunk_pos.z;
     }
 
     (chunk_pos, in_chunk_pos)
@@ -176,11 +177,12 @@ impl InstanceData {
         height: u8,
         block_type: BlockType,
     ) -> Self {
-        if x > 31 || y > 31 || z > 31 {
+        const CHUNK_SIZE: u8 = 30;
+        if x >= CHUNK_SIZE || y >= CHUNK_SIZE || z >= CHUNK_SIZE {
             panic!("Invalid position: ({}, {}, {})", x, y, z);
         }
 
-        if width >= 32 || height >= 32 {
+        if width >= CHUNK_SIZE || height >= CHUNK_SIZE {
             panic!("Invalid width or height: ({}, {})", width, height);
         }
 
