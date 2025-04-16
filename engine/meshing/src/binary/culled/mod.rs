@@ -27,7 +27,7 @@ mod chunk;
 mod voxel;
 
 pub fn chunk_data(data: &DashMap<IVec3, BlockType>, args: &Args, chunks: &DashMap<IVec3, Chunk>) {
-    data.into_par_iter().for_each(|e| {
+    data.into_iter().for_each(|e| {
         let (pos, block) = e.pair();
         let (chunk_pos, in_chunk_pos) = seperate_global_pos(pos);
 

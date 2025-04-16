@@ -46,6 +46,8 @@ where
             gl::CreateVertexArrays(1, &mut id);
         }
 
+        assert!(id != 0, "Failed to create VAO");
+
         Self {
             id,
             len: 0,
