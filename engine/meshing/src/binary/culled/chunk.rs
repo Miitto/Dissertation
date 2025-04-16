@@ -124,21 +124,19 @@ impl Chunk {
         let mut instances = self.instances.write().unwrap();
         instances.clear();
 
-        for dir in Dir::all() {
-            for face in raw_faces[usize::from(dir)].iter() {
-                let data = InstanceData::new(
-                    face.x,
-                    face.y,
-                    face.z,
-                    dir,
-                    face.width,
-                    face.height,
-                    face.block_type,
-                )
-                .rotate_on_dir();
+        for face in raw_faces.iter() {
+            let data = InstanceData::new(
+                face.x,
+                face.y,
+                face.z,
+                face.dir,
+                face.width,
+                face.height,
+                face.block_type,
+            )
+            .rotate_on_dir();
 
-                instances.push(culled_voxel::Instance { data: data.into() });
-            }
+            instances.push(culled_voxel::Instance { data: data.into() });
         }
 
         *self.needs_update.write().unwrap() = false;

@@ -15,13 +15,14 @@ type VoxelRefs = [[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
 type AxisDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]>;
 type FaceDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]>;
 type TransformedBlockDepths = [HashMap<BlockType, Box<[[u32; CHUNK_SIZE]; CHUNK_SIZE]>>; 6];
-type GreedyFaces = Vec<Vec<GreedyFace>>;
+type GreedyFaces = Vec<GreedyFace>;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct GreedyFace {
     pub x: u8,
     pub y: u8,
     pub z: u8,
+    pub dir: Dir,
     pub width: u8,
     pub height: u8,
     pub block_type: BlockType,
@@ -37,11 +38,7 @@ pub struct ChunkRefs<'a> {
     pub z_neg: &'a VoxelRefs,
 }
 
-pub fn make_faces(
-    chunks: &DashMap<IVec3, Chunk>,
-    position: &IVec3,
-    greedy: bool,
-) -> Vec<Vec<GreedyFace>> {
+pub fn make_faces(chunks: &DashMap<IVec3, Chunk>, position: &IVec3, greedy: bool) -> GreedyFaces {
     let blank_voxels = [[[BasicVoxel::new(BlockType::Air); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
     macro_rules! get_chunk {
         ($chunk_name:ident, $block_name:ident,$pos:expr) => {
@@ -111,7 +108,7 @@ pub fn make_faces(
     }
 }
 
-pub fn make_culled_faces(refs: &ChunkRefs) -> Vec<Vec<GreedyFace>> {
+pub fn make_culled_faces(refs: &ChunkRefs) -> GreedyFaces {
     let depths = build_depths(refs);
     let culled = cull_depths(depths);
     let block_faces = depths_to_faces(culled, refs);
@@ -282,15 +279,14 @@ pub fn depths_to_faces(depths: FaceDepths, chunks: &ChunkRefs) -> TransformedBlo
     faces
 }
 
-pub fn culled_faces(faces: TransformedBlockDepths) -> Vec<Vec<GreedyFace>> {
-    let mut culled = vec![vec![], vec![], vec![], vec![], vec![], vec![]];
+pub fn culled_faces(faces: TransformedBlockDepths) -> GreedyFaces {
+    let mut culled = vec![];
 
     for dir in Dir::all() {
-        let face = &mut culled[usize::from(dir)];
         for (block_type, dir_depth) in faces[usize::from(dir)].iter() {
             for depth in 0..CHUNK_SIZE {
-                let faces = culled_face(&dir_depth[depth], depth as u8, block_type);
-                face.extend(faces);
+                let faces = culled_face(&dir_depth[depth], depth as u8, dir, block_type);
+                culled.extend(faces);
             }
         }
     }
@@ -298,7 +294,12 @@ pub fn culled_faces(faces: TransformedBlockDepths) -> Vec<Vec<GreedyFace>> {
     culled
 }
 
-pub fn culled_face(face: &[u32; CHUNK_SIZE], depth: u8, block_type: &BlockType) -> Vec<GreedyFace> {
+pub fn culled_face(
+    face: &[u32; CHUNK_SIZE],
+    depth: u8,
+    dir: Dir,
+    block_type: &BlockType,
+) -> Vec<GreedyFace> {
     let mut quads = vec![];
 
     const CS: u32 = CHUNK_SIZE as u32;
@@ -325,6 +326,7 @@ pub fn culled_face(face: &[u32; CHUNK_SIZE], depth: u8, block_type: &BlockType) 
                     x: row as u8,
                     y: (y + h) as u8,
                     z: depth,
+                    dir,
                     width: 0,
                     height: 0,
                     block_type: *block_type,
@@ -339,14 +341,13 @@ pub fn culled_face(face: &[u32; CHUNK_SIZE], depth: u8, block_type: &BlockType) 
 }
 
 pub fn greedy_faces(mut depths: TransformedBlockDepths) -> GreedyFaces {
-    let mut greedy = vec![vec![], vec![], vec![], vec![], vec![], vec![]];
+    let mut greedy = vec![];
 
     for dir in Dir::all() {
-        let face = &mut greedy[usize::from(dir)];
         for (block_type, block_face) in depths[usize::from(dir)].iter_mut() {
             for depth in 0..CHUNK_SIZE {
-                let faces = greedy_face(&mut block_face[depth], depth as u8, block_type);
-                face.extend(faces);
+                let faces = greedy_face(&mut block_face[depth], depth as u8, dir, block_type);
+                greedy.extend(faces);
             }
         }
     }
@@ -357,6 +358,7 @@ pub fn greedy_faces(mut depths: TransformedBlockDepths) -> GreedyFaces {
 pub fn greedy_face(
     face: &mut [u32; CHUNK_SIZE],
     depth: u8,
+    dir: Dir,
     block_type: &BlockType,
 ) -> Box<[GreedyFace]> {
     let mut quads = vec![];
@@ -402,6 +404,7 @@ pub fn greedy_face(
                     x: row as u8,
                     y: y as u8,
                     z: depth,
+                    dir,
                     width: w as u8 - 1,
                     height: h as u8 - 1,
                     block_type: *block_type,
