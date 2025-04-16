@@ -6,15 +6,15 @@ use tests::{Scene, Test};
 #[command(version, about, long_about = None)]
 pub struct Args {
     /// Scene to use
-    #[arg(short, long, default_value = "single")]
+    #[arg(short, long, default_value = "perlin")]
     pub scene: Scene,
 
     /// Test type
-    #[arg(short, long, default_value = "basic")]
+    #[arg(short, long, default_value = "culled")]
     pub test: Test,
 
     /// Radius
-    #[arg(short, long, default_value = "8")]
+    #[arg(short, long, default_value = "32")]
     pub radius: i32,
 
     /// Height
@@ -43,10 +43,10 @@ impl Args {
         Self {
             scene: Scene::Single,
             test: Test::Basic,
-            radius: 8,
+            radius: 32,
             depth: 20,
             frustum_cull: false,
-            combine: false,
+            combine: true,
             profile: false,
             auto_test: false,
         }
