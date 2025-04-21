@@ -112,7 +112,7 @@ pub struct BasicVoxel {
 }
 
 impl BasicVoxel {
-    pub fn new(block_type: BlockType) -> Self {
+    pub const fn new(block_type: BlockType) -> Self {
         Self { block_type }
     }
 }

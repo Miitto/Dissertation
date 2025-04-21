@@ -1,3 +1,4 @@
+#![feature(portable_simd)]
 use glam::Mat4;
 use renderer::{ProgramSource, Renderable, buffers::ShaderBuffer, mesh::basic::BasicMesh};
 

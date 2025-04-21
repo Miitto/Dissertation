@@ -3,18 +3,127 @@ use std::sync::RwLock;
 use dashmap::DashMap;
 use glam::IVec3;
 use renderer::{
-    Dir, DrawMode,
+    Axis, DrawMode,
     bounds::BoundingHeirarchy,
     mesh::{Mesh, ninstanced::NInstancedMesh},
 };
 
-use crate::binary::common::{CHUNK_SIZE, make_faces};
+use crate::binary::common::{
+    AxisDepths, CHUNK_SIZE, ChunkRefs, VoxelArray, build_depths, make_faces,
+};
 use common::{BasicVoxel, BlockType, InstanceData, Voxel};
 
 use super::voxel::culled_voxel;
 
+pub struct VoxelData {
+    pub voxels: RwLock<Box<VoxelArray>>,
+    pub depth_mask: RwLock<Option<Box<AxisDepths>>>,
+}
+
+impl VoxelData {
+    pub fn new(voxels: Box<VoxelArray>) -> Self {
+        Self {
+            voxels: RwLock::new(voxels),
+            depth_mask: RwLock::new(None),
+        }
+    }
+
+    pub fn set(&self, pos: &IVec3, block_type: &BlockType) {
+        // If in chunk
+        if pos.max_element() < CHUNK_SIZE as i32 && pos.min_element() >= 0 {
+            let mut voxel =
+                self.voxels.write().unwrap()[pos.x as usize][pos.y as usize][pos.z as usize];
+            voxel.set_type(*block_type);
+        }
+
+        if let Some(mask) = self.depth_mask.write().unwrap().as_mut() {
+            assert!(pos.x >= -1 && pos.x < CHUNK_SIZE as i32 + 1);
+
+            let x = (pos.x + 1) as usize;
+            let y = (pos.y + 1) as usize;
+            let z = (pos.z + 1) as usize;
+            if block_type.is_solid() {
+                mask[usize::from(Axis::X)][y][z] |= 1 << x;
+                mask[usize::from(Axis::Y)][z][x] |= 1 << y;
+                mask[usize::from(Axis::Z)][y][x] |= 1 << z;
+            } else {
+                mask[usize::from(Axis::X)][y][z] &= !(1 << x);
+                mask[usize::from(Axis::Y)][z][x] &= !(1 << y);
+                mask[usize::from(Axis::Z)][y][x] &= !(1 << z);
+            }
+        }
+    }
+
+    pub fn build_depths(&self, chunks: &DashMap<IVec3, Chunk>, position: &IVec3) {
+        if self.depth_mask.read().unwrap().is_none() {
+            macro_rules! get_chunk {
+                ($chunk_name:ident, $block_name:ident,$pos:expr) => {
+                    let $chunk_name = chunks.get($pos);
+                    let $chunk_name = if let Some(ref chunk) = $chunk_name {
+                        let voxels = chunk.voxels();
+                        let read = voxels.voxels.read().expect("Failed to read blocks");
+
+                        Some((chunk, voxels, read))
+                    } else {
+                        None
+                    };
+                    let $block_name = if let Some(ref read) = $chunk_name {
+                        let read = &read.2;
+                        read.as_ref()
+                    } else {
+                        &crate::binary::common::BLANK_VOXELS
+                    };
+                };
+            }
+            get_chunk!(chunk_center, blocks_center, position);
+            get_chunk!(
+                chunk_x_neg,
+                blocks_x_neg,
+                &IVec3::new(position.x - 1, position.y, position.z)
+            );
+            get_chunk!(
+                chunk_y_neg,
+                blocks_y_neg,
+                &IVec3::new(position.x, position.y - 1, position.z)
+            );
+            get_chunk!(
+                chunk_z_neg,
+                blocks_z_neg,
+                &IVec3::new(position.x, position.y, position.z - 1)
+            );
+            get_chunk!(
+                chunk_x_pos,
+                blocks_x_pos,
+                &IVec3::new(position.x + 1, position.y, position.z)
+            );
+            get_chunk!(
+                chunk_y_pos,
+                blocks_y_pos,
+                &IVec3::new(position.x, position.y + 1, position.z)
+            );
+            get_chunk!(
+                chunk_z_pos,
+                blocks_z_pos,
+                &IVec3::new(position.x, position.y, position.z + 1)
+            );
+            let refs = ChunkRefs {
+                chunk: blocks_center,
+                x_pos: blocks_x_pos,
+                y_pos: blocks_y_pos,
+                z_pos: blocks_z_pos,
+                x_neg: blocks_x_neg,
+                y_neg: blocks_y_neg,
+                z_neg: blocks_z_neg,
+            };
+
+            let mask = build_depths(&refs);
+            *self.depth_mask.write().unwrap() = Some(mask);
+        }
+    }
+}
+
 pub struct Chunk {
-    voxels: RwLock<Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>>,
+    voxels: VoxelData,
     bounds: RwLock<BoundingHeirarchy>,
     instances: RwLock<Vec<culled_voxel::Instance>>,
     mesh: RwLock<Option<NInstancedMesh<culled_voxel::Vertex, culled_voxel::Instance>>>,
@@ -53,7 +162,7 @@ impl Chunk {
         }
 
         Self {
-            voxels: RwLock::new(voxels),
+            voxels: VoxelData::new(voxels),
             mesh: RwLock::new(mesh),
             bounds: RwLock::new(BoundingHeirarchy::default()),
             instances: RwLock::new(vec![]),
@@ -68,7 +177,7 @@ impl Chunk {
         assert!(y < CHUNK_SIZE);
         assert!(z < CHUNK_SIZE);
 
-        self.voxels.read().unwrap()[x][y][z].get_type()
+        self.voxels.voxels.read().unwrap()[x][y][z].get_type()
     }
 
     pub fn set(&self, pos: IVec3, block_type: BlockType) {
@@ -77,8 +186,7 @@ impl Chunk {
             return;
         }
 
-        self.voxels.write().unwrap()[pos.x as usize][pos.y as usize][pos.z as usize]
-            .set_type(block_type);
+        self.voxels.set(&pos, &block_type);
 
         self.invalidate()
     }
@@ -115,9 +223,12 @@ impl Chunk {
             return false;
         }
 
+        self.voxels.build_depths(chunks, position);
+
         let raw_faces = make_faces(
             chunks,
             position,
+            self.voxels.depth_mask.read().unwrap().as_ref().unwrap(),
             *self.greedy.read().expect("Failed to read greedy"),
         );
 
@@ -162,7 +273,7 @@ impl Chunk {
         true
     }
 
-    pub fn voxels(&self) -> &RwLock<Box<[[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE]>> {
+    pub fn voxels(&self) -> &VoxelData {
         &self.voxels
     }
 

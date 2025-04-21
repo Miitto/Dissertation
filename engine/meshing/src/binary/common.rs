@@ -11,9 +11,10 @@ use super::culled::Chunk;
 const CHUNK_SIZE_P: usize = 32;
 pub const CHUNK_SIZE: usize = 30;
 
-type VoxelRefs = [[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
-type AxisDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]>;
-type FaceDepths = Box<[[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]>;
+type Depth = u32;
+pub type VoxelArray = [[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+pub type AxisDepths = [[[Depth; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3];
+type FaceDepths = Box<[[[Depth; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]>;
 type TransformedBlockDepths = [HashMap<BlockType, Box<[[u32; CHUNK_SIZE]; CHUNK_SIZE]>>; 6];
 type GreedyFaces = Vec<GreedyFace>;
 
@@ -28,24 +29,31 @@ pub struct GreedyFace {
     pub block_type: BlockType,
 }
 
+pub static BLANK_VOXELS: [[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
+    [[[BasicVoxel::new(BlockType::Air); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+
 pub struct ChunkRefs<'a> {
-    pub chunk: &'a VoxelRefs,
-    pub x_pos: &'a VoxelRefs,
-    pub y_pos: &'a VoxelRefs,
-    pub z_pos: &'a VoxelRefs,
-    pub x_neg: &'a VoxelRefs,
-    pub y_neg: &'a VoxelRefs,
-    pub z_neg: &'a VoxelRefs,
+    pub chunk: &'a VoxelArray,
+    pub x_pos: &'a VoxelArray,
+    pub y_pos: &'a VoxelArray,
+    pub z_pos: &'a VoxelArray,
+    pub x_neg: &'a VoxelArray,
+    pub y_neg: &'a VoxelArray,
+    pub z_neg: &'a VoxelArray,
 }
 
-pub fn make_faces(chunks: &DashMap<IVec3, Chunk>, position: &IVec3, greedy: bool) -> GreedyFaces {
-    let blank_voxels = [[[BasicVoxel::new(BlockType::Air); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+pub fn make_faces(
+    chunks: &DashMap<IVec3, Chunk>,
+    position: &IVec3,
+    depths: &AxisDepths,
+    greedy: bool,
+) -> GreedyFaces {
     macro_rules! get_chunk {
         ($chunk_name:ident, $block_name:ident,$pos:expr) => {
             let $chunk_name = chunks.get($pos);
             let $chunk_name = if let Some(ref chunk) = $chunk_name {
                 let voxels = chunk.voxels();
-                let read = voxels.read().expect("Failed to read blocks");
+                let read = voxels.voxels.read().expect("Failed to read blocks");
 
                 Some((chunk, voxels, read))
             } else {
@@ -55,7 +63,7 @@ pub fn make_faces(chunks: &DashMap<IVec3, Chunk>, position: &IVec3, greedy: bool
                 let read = &read.2;
                 read.as_ref()
             } else {
-                &blank_voxels
+                &BLANK_VOXELS
             };
         };
     }
@@ -102,22 +110,20 @@ pub fn make_faces(chunks: &DashMap<IVec3, Chunk>, position: &IVec3, greedy: bool
     };
 
     if greedy {
-        make_greedy_faces(&refs)
+        make_greedy_faces(&refs, depths)
     } else {
-        make_culled_faces(&refs)
+        make_culled_faces(&refs, depths)
     }
 }
 
-pub fn make_culled_faces(refs: &ChunkRefs) -> GreedyFaces {
-    let depths = build_depths(refs);
+pub fn make_culled_faces(refs: &ChunkRefs, depths: &AxisDepths) -> GreedyFaces {
     let culled = cull_depths(depths);
     let block_faces = depths_to_faces(culled, refs);
 
     culled_faces(block_faces)
 }
 
-pub fn make_greedy_faces(chunks: &ChunkRefs) -> GreedyFaces {
-    let depths = build_depths(chunks);
+pub fn make_greedy_faces(chunks: &ChunkRefs, depths: &AxisDepths) -> GreedyFaces {
     let culled = cull_depths(depths);
     let block_faces = depths_to_faces(culled, chunks);
 
@@ -126,7 +132,7 @@ pub fn make_greedy_faces(chunks: &ChunkRefs) -> GreedyFaces {
 
 /// Build a depth mask for each axis.
 /// Each integer is a view along the depth of that axis.
-pub fn build_depths(chunks: &ChunkRefs) -> AxisDepths {
+pub fn build_depths(chunks: &ChunkRefs) -> Box<AxisDepths> {
     let mut depths = Box::new([[[0; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3]);
 
     #[inline]
@@ -135,7 +141,7 @@ pub fn build_depths(chunks: &ChunkRefs) -> AxisDepths {
         x: usize,
         y: usize,
         z: usize,
-        depths: &mut [[[u64; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3],
+        depths: &mut [[[Depth; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 3],
     ) {
         if solid {
             depths[usize::from(Axis::X)][y][z] |= 1 << x;
@@ -209,13 +215,13 @@ pub fn build_depths(chunks: &ChunkRefs) -> AxisDepths {
 /// when we move between a solid to an air block
 /// Store this in binary slices for all faces.
 /// Each integer is a view along the depth of that axis.
-pub fn cull_depths(depths: AxisDepths) -> FaceDepths {
+pub fn cull_depths(depths: &AxisDepths) -> FaceDepths {
     let mut culled_faces = Box::new([[[0; CHUNK_SIZE_P]; CHUNK_SIZE_P]; 6]);
 
     for axis in Axis::all() {
         for z in 0..CHUNK_SIZE_P {
             for x in 0..CHUNK_SIZE_P {
-                let col = depths[usize::from(axis)][z][x];
+                let col = &depths[usize::from(axis)][z][x];
 
                 // Binary not against a left / right shift
                 // only leaves a 1 where you moved from 0-1 in the
