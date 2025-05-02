@@ -1,4 +1,5 @@
-use std::collections::HashMap;
+// type HashMap<K, V> = std::collections::HashMap<K, V>;
+type HashMap<K, V> = hashbrown::HashMap<K, V>;
 
 use dashmap::DashMap;
 use glam::IVec3;

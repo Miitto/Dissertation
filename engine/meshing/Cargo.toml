@@ -18,3 +18,4 @@ winit.workspace = true
 gl.workspace = true
 rayon.workspace = true
 dashmap.workspace = true
+hashbrown = "0.15.2"

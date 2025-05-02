@@ -116,9 +116,9 @@ impl Renderable for Screen {
         self.post_render();
     }
 
-    fn cull(&mut self, cull: bool) {}
+    fn cull(&mut self, _cull: bool) {}
 
-    fn combine(&mut self, combine: bool) {}
+    fn combine(&mut self, _combine: bool) {}
 }
 
 renderer::snippet!(ray, {

@@ -7,9 +7,9 @@ use renderer::{
 };
 use winit::{
     application::ApplicationHandler,
-    event::{self, DeviceEvent, KeyEvent, MouseScrollDelta, WindowEvent},
+    event::{DeviceEvent, MouseScrollDelta, WindowEvent},
     event_loop::ActiveEventLoop,
-    keyboard::{KeyCode, PhysicalKey},
+    keyboard::PhysicalKey,
 };
 
 use common::{

@@ -65,10 +65,10 @@ impl std::fmt::Display for Args {
             flags.push(' ');
         }
         if self.frustum_cull {
-            flags.push_str("F");
+            flags.push('F');
         }
         if self.combine {
-            flags.push_str("C");
+            flags.push('C');
         }
         write!(f, "{:?}{}, {:?}{}", self.scene, radius, self.test, flags)
     }
@@ -288,6 +288,7 @@ impl std::fmt::Display for InstanceData {
     }
 }
 
+#[allow(unused_variables, unreachable_code)]
 pub fn get_looked_at_block(
     camera: &dyn Camera,
     get_block_fn: impl Fn(&IVec3) -> BlockType,

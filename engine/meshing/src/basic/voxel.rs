@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use glam::IVec3;
-use renderer::{ProgramSource, Renderable, State, buffers::ShaderBuffer, mesh::basic::BasicMesh};
+use renderer::{ProgramSource, Renderable, State, mesh::basic::BasicMesh};
 
 use common::BlockType;
 
