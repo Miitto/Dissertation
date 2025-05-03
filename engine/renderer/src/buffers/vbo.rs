@@ -103,6 +103,10 @@ where
 
         Ok(realloc)
     }
+
+    fn set_label(&mut self, label: impl Into<String>) {
+        self.buffer.set_label(label);
+    }
 }
 
 impl<T> FencedBuffer for Vbo<T>

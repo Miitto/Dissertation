@@ -7,7 +7,6 @@ edition = "2024"
 members = [
   "common",
   "meshing",
-  "raytracing",
   "render_common",
   "renderer",
   "shader_macros",
@@ -29,7 +28,6 @@ dashmap = { version = "6.1.0", features = ["rayon"] }
 
 [dependencies]
 meshing = { path = "./meshing" }
-raytracing = { path = "./raytracing" }
 renderer.workspace = true
 common.workspace = true
 shaders.workspace = true

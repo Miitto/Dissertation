@@ -1,7 +1,7 @@
 use proc_macro::{Diagnostic, Ident, Level};
 
 use crate::{
-    shader_var::{ShaderFunction, ShaderStruct, ShaderType},
+    shader_var::{ShaderConstant, ShaderFunction, ShaderStruct, ShaderType},
     uniform::{LayoutBlock, Uniform},
 };
 
@@ -17,6 +17,7 @@ pub(crate) struct ShaderInfo {
     pub includes: Vec<String>,
     pub uses: Vec<Vec<Ident>>,
     pub compute: Vec<ComputeInfo>,
+    pub constants: Vec<ShaderConstant>,
 }
 
 impl ShaderInfo {

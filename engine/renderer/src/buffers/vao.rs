@@ -8,6 +8,40 @@ use crate::{
 
 use super::{Buffer, Vbo};
 
+pub struct BlankVao {
+    id: u32,
+}
+
+impl BlankVao {
+    pub fn new() -> Self {
+        let mut id = 0;
+        unsafe {
+            gl::CreateVertexArrays(1, &mut id);
+        }
+        Self { id }
+    }
+
+    pub fn bind(&self) {
+        unsafe {
+            gl::BindVertexArray(self.id);
+        }
+    }
+}
+
+impl Default for BlankVao {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for BlankVao {
+    fn drop(&mut self) {
+        unsafe {
+            gl::DeleteVertexArrays(1, &self.id);
+        }
+    }
+}
+
 #[allow(dead_code)]
 pub struct Vao<T, I = T>
 where

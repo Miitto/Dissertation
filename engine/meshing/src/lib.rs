@@ -27,9 +27,9 @@ impl Renderable for Triangle {
         state.draw(&mut self.mesh, &program, &empty_uniforms);
     }
 
-    fn cull(&mut self, _cull: bool) {}
-
-    fn combine(&mut self, _combine: bool) {}
+    fn args(&mut self, args: &common::Args) {
+        todo!()
+    }
 }
 
 pub fn setup() -> Box<dyn Renderable> {

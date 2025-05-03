@@ -1,5 +1,6 @@
 use std::{fs::OpenOptions, io::Write, path::PathBuf};
 
+use meshing::basic::BasicRenderType;
 use renderer::{
     Renderable, State,
     camera::{Camera, CameraManager, PerspectiveCamera},
@@ -24,95 +25,172 @@ macro_rules! make_test {
         args.test = Test::$test;
         args.frustum_cull = $frustum;
         args.combine = $combine;
+        args.vertex_pull = false;
         args.auto_test = true;
         args
     }};
-    ($scene:ident, $test:ident, $frustum:literal, $combine:literal, $radius:literal) => {{
+    ($scene:ident, $test:ident, $frustum:literal, $combine:literal, $vertex_pull:literal) => {{
         let mut args = make_test!($scene, $test, $frustum, $combine);
+        args.vertex_pull = $vertex_pull;
+        args
+    }};
+    ($scene:ident, $test:ident, $frustum:literal, $combine:literal, $vertex_pull:literal, $radius:literal) => {{
+        let mut args = make_test!($scene, $test, $frustum, $combine, $vertex_pull);
         args.radius = $radius;
         args
     }};
 }
 
 const TIME_PER_TEST: f64 = 5.0;
-const TESTS: [Args; 77] = [
+const TESTS: [Args; 148] = [
     make_test!(Single, Basic, false, false),
-    make_test!(Single, Instanced, false, false),
+    make_test!(Single, Basic, false, true),
+    make_test!(Single, Basic, false, false, true),
     make_test!(Single, Culled, false, false),
     make_test!(Single, Culled, true, false),
     make_test!(Single, Culled, false, true),
     make_test!(Single, Culled, true, true),
+    make_test!(Single, Culled, false, false, true),
+    make_test!(Single, Culled, true, false, true),
+    make_test!(Single, Culled, false, true, true),
+    make_test!(Single, Culled, true, true, true),
     make_test!(Single, Greedy, false, false),
     make_test!(Single, Greedy, true, false),
     make_test!(Single, Greedy, false, true),
     make_test!(Single, Greedy, true, true),
+    make_test!(Single, Greedy, false, false, true),
+    make_test!(Single, Greedy, true, false, true),
+    make_test!(Single, Greedy, false, true, true),
+    make_test!(Single, Greedy, true, true, true),
     make_test!(Cube, Basic, false, false),
-    make_test!(Cube, Instanced, false, false),
+    make_test!(Cube, Basic, false, true),
+    make_test!(Cube, Basic, false, false, true),
     make_test!(Cube, Culled, false, false),
     make_test!(Cube, Culled, true, false),
     make_test!(Cube, Culled, false, true),
     make_test!(Cube, Culled, true, true),
+    make_test!(Cube, Culled, false, false, true),
+    make_test!(Cube, Culled, true, false, true),
+    make_test!(Cube, Culled, false, true, true),
+    make_test!(Cube, Culled, true, true, true),
     make_test!(Cube, Greedy, false, false),
     make_test!(Cube, Greedy, true, false),
     make_test!(Cube, Greedy, false, true),
     make_test!(Cube, Greedy, true, true),
-    make_test!(Perlin, Basic, false, false, 32),
-    make_test!(Perlin, Instanced, false, false, 32),
-    make_test!(Perlin, Culled, false, false, 32),
-    make_test!(Perlin, Culled, true, false, 32),
-    make_test!(Perlin, Culled, false, true, 32),
-    make_test!(Perlin, Culled, true, true, 32),
-    make_test!(Perlin, Greedy, false, false, 32),
-    make_test!(Perlin, Greedy, true, false, 32),
-    make_test!(Perlin, Greedy, false, true, 32),
-    make_test!(Perlin, Greedy, true, true, 32),
-    make_test!(Perlin, Basic, false, false, 64),
-    make_test!(Perlin, Instanced, false, false, 64),
-    make_test!(Perlin, Culled, false, false, 64),
-    make_test!(Perlin, Culled, true, false, 64),
-    make_test!(Perlin, Culled, false, true, 64),
-    make_test!(Perlin, Culled, true, true, 64),
-    make_test!(Perlin, Greedy, false, false, 64),
-    make_test!(Perlin, Greedy, true, false, 64),
-    make_test!(Perlin, Greedy, false, true, 64),
-    make_test!(Perlin, Greedy, true, true, 64),
-    make_test!(Perlin, Basic, false, false, 128),
-    make_test!(Perlin, Instanced, false, false, 128),
-    make_test!(Perlin, Culled, false, false, 128),
-    make_test!(Perlin, Culled, true, false, 128),
-    make_test!(Perlin, Culled, false, true, 128),
-    make_test!(Perlin, Culled, true, true, 128),
-    make_test!(Perlin, Greedy, false, false, 128),
-    make_test!(Perlin, Greedy, true, false, 128),
-    make_test!(Perlin, Greedy, false, true, 128),
-    make_test!(Perlin, Greedy, true, true, 128),
-    make_test!(Perlin, Basic, false, false, 256),
-    make_test!(Perlin, Instanced, false, false, 256),
-    make_test!(Perlin, Culled, false, false, 256),
-    make_test!(Perlin, Culled, true, false, 256),
-    make_test!(Perlin, Culled, false, true, 256),
-    make_test!(Perlin, Culled, true, true, 256),
-    make_test!(Perlin, Greedy, false, false, 256),
-    make_test!(Perlin, Greedy, true, false, 256),
-    make_test!(Perlin, Greedy, false, true, 256),
-    make_test!(Perlin, Greedy, true, true, 256),
-    make_test!(Perlin, Instanced, false, false, 512),
-    make_test!(Perlin, Culled, false, false, 512),
-    make_test!(Perlin, Culled, true, false, 512),
-    make_test!(Perlin, Culled, false, true, 512),
-    make_test!(Perlin, Culled, true, true, 512),
-    make_test!(Perlin, Greedy, false, false, 512),
-    make_test!(Perlin, Greedy, true, false, 512),
-    make_test!(Perlin, Greedy, false, true, 512),
-    make_test!(Perlin, Greedy, true, true, 512),
-    make_test!(Perlin, Culled, false, false, 1024),
-    make_test!(Perlin, Culled, true, false, 1024),
-    make_test!(Perlin, Culled, false, true, 1024),
-    make_test!(Perlin, Culled, true, true, 1024),
-    make_test!(Perlin, Greedy, false, false, 1024),
-    make_test!(Perlin, Greedy, true, false, 1024),
-    make_test!(Perlin, Greedy, false, true, 1024),
-    make_test!(Perlin, Greedy, true, true, 1024),
+    make_test!(Cube, Greedy, false, false, true),
+    make_test!(Cube, Greedy, true, false, true),
+    make_test!(Cube, Greedy, false, true, true),
+    make_test!(Cube, Greedy, true, true, true),
+    make_test!(Perlin, Basic, false, false, false, 32),
+    make_test!(Perlin, Basic, false, true, false, 32),
+    make_test!(Perlin, Basic, false, false, true, 32),
+    make_test!(Perlin, Culled, false, false, false, 32),
+    make_test!(Perlin, Culled, true, false, false, 32),
+    make_test!(Perlin, Culled, false, true, false, 32),
+    make_test!(Perlin, Culled, true, true, false, 32),
+    make_test!(Perlin, Culled, false, false, true, 32),
+    make_test!(Perlin, Culled, true, false, true, 32),
+    make_test!(Perlin, Culled, false, true, true, 32),
+    make_test!(Perlin, Culled, true, true, true, 32),
+    make_test!(Perlin, Greedy, false, false, false, 32),
+    make_test!(Perlin, Greedy, true, false, false, 32),
+    make_test!(Perlin, Greedy, false, true, false, 32),
+    make_test!(Perlin, Greedy, true, true, false, 32),
+    make_test!(Perlin, Greedy, false, false, true, 32),
+    make_test!(Perlin, Greedy, true, false, true, 32),
+    make_test!(Perlin, Greedy, false, true, true, 32),
+    make_test!(Perlin, Greedy, true, true, true, 32),
+    make_test!(Perlin, Basic, false, false, false, 64),
+    make_test!(Perlin, Basic, false, true, false, 64),
+    make_test!(Perlin, Basic, false, false, true, 64),
+    make_test!(Perlin, Culled, false, false, false, 64),
+    make_test!(Perlin, Culled, true, false, false, 64),
+    make_test!(Perlin, Culled, false, true, false, 64),
+    make_test!(Perlin, Culled, true, true, false, 64),
+    make_test!(Perlin, Culled, false, false, true, 64),
+    make_test!(Perlin, Culled, true, false, true, 64),
+    make_test!(Perlin, Culled, false, true, true, 64),
+    make_test!(Perlin, Culled, true, true, true, 64),
+    make_test!(Perlin, Greedy, false, false, false, 64),
+    make_test!(Perlin, Greedy, true, false, false, 64),
+    make_test!(Perlin, Greedy, false, true, false, 64),
+    make_test!(Perlin, Greedy, true, true, false, 64),
+    make_test!(Perlin, Greedy, false, false, true, 64),
+    make_test!(Perlin, Greedy, true, false, true, 64),
+    make_test!(Perlin, Greedy, false, true, true, 64),
+    make_test!(Perlin, Greedy, true, true, true, 64),
+    make_test!(Perlin, Basic, false, false, false, 128),
+    make_test!(Perlin, Basic, false, true, false, 128),
+    make_test!(Perlin, Basic, false, false, true, 128),
+    make_test!(Perlin, Culled, false, false, false, 128),
+    make_test!(Perlin, Culled, true, false, false, 128),
+    make_test!(Perlin, Culled, false, true, false, 128),
+    make_test!(Perlin, Culled, true, true, false, 128),
+    make_test!(Perlin, Culled, false, false, true, 128),
+    make_test!(Perlin, Culled, true, false, true, 128),
+    make_test!(Perlin, Culled, false, true, true, 128),
+    make_test!(Perlin, Culled, true, true, true, 128),
+    make_test!(Perlin, Greedy, false, false, false, 128),
+    make_test!(Perlin, Greedy, true, false, false, 128),
+    make_test!(Perlin, Greedy, false, true, false, 128),
+    make_test!(Perlin, Greedy, true, true, false, 128),
+    make_test!(Perlin, Greedy, false, false, true, 128),
+    make_test!(Perlin, Greedy, true, false, true, 128),
+    make_test!(Perlin, Greedy, false, true, true, 128),
+    make_test!(Perlin, Greedy, true, true, true, 128),
+    make_test!(Perlin, Basic, false, false, false, 256),
+    make_test!(Perlin, Basic, false, true, false, 256),
+    make_test!(Perlin, Basic, false, false, true, 256),
+    make_test!(Perlin, Culled, false, false, false, 256),
+    make_test!(Perlin, Culled, true, false, false, 256),
+    make_test!(Perlin, Culled, false, true, false, 256),
+    make_test!(Perlin, Culled, true, true, false, 256),
+    make_test!(Perlin, Culled, false, false, true, 256),
+    make_test!(Perlin, Culled, true, false, true, 256),
+    make_test!(Perlin, Culled, false, true, true, 256),
+    make_test!(Perlin, Culled, true, true, true, 256),
+    make_test!(Perlin, Greedy, false, false, false, 256),
+    make_test!(Perlin, Greedy, true, false, false, 256),
+    make_test!(Perlin, Greedy, false, true, false, 256),
+    make_test!(Perlin, Greedy, true, true, false, 256),
+    make_test!(Perlin, Greedy, false, false, true, 256),
+    make_test!(Perlin, Greedy, true, false, true, 256),
+    make_test!(Perlin, Greedy, false, true, true, 256),
+    make_test!(Perlin, Greedy, true, true, true, 256),
+    make_test!(Perlin, Basic, false, true, false, 512),
+    make_test!(Perlin, Basic, false, false, true, 512),
+    make_test!(Perlin, Culled, false, false, false, 512),
+    make_test!(Perlin, Culled, true, false, false, 512),
+    make_test!(Perlin, Culled, false, true, false, 512),
+    make_test!(Perlin, Culled, true, true, false, 512),
+    make_test!(Perlin, Culled, false, false, true, 512),
+    make_test!(Perlin, Culled, true, false, true, 512),
+    make_test!(Perlin, Culled, false, true, true, 512),
+    make_test!(Perlin, Culled, true, true, true, 512),
+    make_test!(Perlin, Greedy, false, false, false, 512),
+    make_test!(Perlin, Greedy, true, false, false, 512),
+    make_test!(Perlin, Greedy, false, true, false, 512),
+    make_test!(Perlin, Greedy, true, true, false, 512),
+    make_test!(Perlin, Greedy, false, false, true, 512),
+    make_test!(Perlin, Greedy, true, false, true, 512),
+    make_test!(Perlin, Greedy, false, true, true, 512),
+    make_test!(Perlin, Greedy, true, true, true, 512),
+    make_test!(Perlin, Culled, false, false, false, 1024),
+    make_test!(Perlin, Culled, true, false, false, 1024),
+    make_test!(Perlin, Culled, false, true, false, 1024),
+    make_test!(Perlin, Culled, true, true, false, 1024),
+    make_test!(Perlin, Culled, false, false, true, 1024),
+    make_test!(Perlin, Culled, true, false, true, 1024),
+    make_test!(Perlin, Culled, false, true, true, 1024),
+    make_test!(Perlin, Culled, true, true, true, 1024),
+    make_test!(Perlin, Greedy, false, false, false, 1024),
+    make_test!(Perlin, Greedy, true, false, false, 1024),
+    make_test!(Perlin, Greedy, false, true, false, 1024),
+    make_test!(Perlin, Greedy, true, true, false, 1024),
+    make_test!(Perlin, Greedy, false, false, true, 1024),
+    make_test!(Perlin, Greedy, true, false, true, 1024),
+    make_test!(Perlin, Greedy, false, true, true, 1024),
+    make_test!(Perlin, Greedy, true, true, true, 1024),
 ];
 
 fn setup_test(app: &mut App) {
@@ -123,11 +201,16 @@ fn setup_test(app: &mut App) {
             app.state.as_ref().unwrap(),
         )) as Box<dyn Renderable>,
 
-        Test::Instanced => Box::new(meshing::basic::setup(&app.args, true)) as Box<dyn Renderable>,
-        Test::Basic => Box::new(meshing::basic::setup(&app.args, false)) as Box<dyn Renderable>,
-        Test::Raymarch => raytracing::setup(app.state.as_ref().unwrap()),
-        Test::Flat => raytracing::flat::setup(&app.args, app.state.as_ref().unwrap()),
-        Test::Svt64 => raytracing::svt64::setup(&app.args, app.state.as_ref().unwrap()),
+        Test::Basic => Box::new(meshing::basic::setup(
+            &app.args,
+            if app.args.vertex_pull {
+                BasicRenderType::VertexPull
+            } else if app.args.combine {
+                BasicRenderType::Instanced
+            } else {
+                BasicRenderType::Basic
+            },
+        )) as Box<dyn Renderable>,
     })
 }
 
@@ -283,9 +366,9 @@ impl ApplicationHandler for App {
                 {
                     if self.args.auto_test {
                         if self.test_step != 0 {
-                            let fps = self.state().avg_fps();
-                            self.test_fps.push(fps);
-                            println!("Average FPS for {:?}: {}", self.args, fps);
+                            let avg_time = self.state().avg_frame_time();
+                            self.test_fps.push(avg_time);
+                            println!("Average Time for {}: {}", self.args, avg_time);
 
                             let mut file = OpenOptions::new()
                                 .append(true)
@@ -293,7 +376,7 @@ impl ApplicationHandler for App {
                                 .open("test_results.txt")
                                 .unwrap();
 
-                            file.write_all(format!("{}: {}\n", self.args, fps).as_bytes())
+                            file.write_all(format!("{}: {}\n", self.args, avg_time).as_bytes())
                                 .unwrap();
                         }
                         let old_scene = self.args.scene;
@@ -313,8 +396,8 @@ impl ApplicationHandler for App {
                         {
                             setup_test(self);
                         } else {
-                            self.setup.as_mut().unwrap().combine(self.args.combine);
-                            self.setup.as_mut().unwrap().cull(self.args.frustum_cull);
+                            let setup = self.setup.as_mut().unwrap();
+                            setup.args(&self.args);
                         }
 
                         let new_cam = PerspectiveCamera::default();

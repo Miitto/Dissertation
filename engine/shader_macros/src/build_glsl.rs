@@ -5,6 +5,8 @@ use crate::{
     ProgramInput, ShaderInfo, shader_info::ComputeInfo, shader_var::ShaderType, uniform::Uniform,
 };
 
+const WRITE_VERTEX: bool = false;
+const WRITE_SNIPPET: bool = false;
 const WRITE_COMPUTE: bool = false;
 
 fn get_uniforms(info: &ShaderInfo) -> String {
@@ -87,7 +89,20 @@ fn get_functions(info: &ShaderInfo) -> String {
         .join("\n")
 }
 
-pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> String {
+fn get_constants(info: &ShaderInfo) -> String {
+    info.constants
+        .iter()
+        .map(|c| c.to_string())
+        .collect::<Vec<String>>()
+        .join("\n")
+}
+
+pub fn vertex_shader(
+    ProgramInput {
+        content: info,
+        meta,
+    }: &ProgramInput,
+) -> String {
     let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
@@ -95,6 +110,8 @@ pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Strin
     let functions = get_functions(info);
 
     let buffers = get_buffers(info);
+
+    let constants = get_constants(info);
 
     let vertex_fn = if let Some(vertex_fn) = info.vertex_fn.as_ref() {
         vertex_fn
@@ -107,46 +124,56 @@ pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Strin
         return "".to_string();
     };
 
-    let vertex_input = match &vertex_fn.params[0].var.t {
+    let vertex_input = &vertex_fn.params.first().map(|v| match &v.var.t {
         ShaderType::Struct(s) => s,
         _ => {
-            panic!("Fragment function must take a struct as input");
+            panic!("Vertex function must take a struct as input");
         }
-    };
+    });
 
-    let in_vars = {
-        let iter = vertex_input.fields.iter();
+    let in_vars = vertex_input
+        .as_ref()
+        .map(|vertex_input| {
+            let iter = vertex_input.fields.iter();
 
-        if let Some(instance) = vertex_fn.params.get(1).map(|i| match &i.var.t {
-            ShaderType::Struct(s) => s,
-            _ => {
-                panic!("Vertex function must take a struct as input");
+            if let Some(instance) = vertex_fn.params.get(1).map(|i| match &i.var.t {
+                ShaderType::Struct(s) => s,
+                _ => {
+                    panic!("Vertex function must take a struct as input");
+                }
+            }) {
+                let iter = iter.chain(instance.fields.iter());
+                iter.enumerate()
+                    .map(|(idx, f)| format!("layout(location = {}) in {} {};", idx, f.t, f.name))
+                    .collect::<Vec<String>>()
+                    .join("\n")
+            } else {
+                iter.enumerate()
+                    .map(|(idx, f)| format!("layout(location = {}) in {} {};", idx, f.t, f.name))
+                    .collect::<Vec<String>>()
+                    .join("\n")
             }
-        }) {
-            let iter = iter.chain(instance.fields.iter());
-            iter.enumerate()
-                .map(|(idx, f)| format!("layout(location = {}) in {} {};", idx, f.t, f.name))
-                .collect::<Vec<String>>()
-                .join("\n")
-        } else {
-            iter.enumerate()
-                .map(|(idx, f)| format!("layout(location = {}) in {} {};", idx, f.t, f.name))
-                .collect::<Vec<String>>()
-                .join("\n")
-        }
+        })
+        .unwrap_or_default();
+
+    let in_to_struct_assign = vertex_input.map(|vertex_input| {
+        vertex_input
+            .fields
+            .iter()
+            .map(|f| format!("    vertex_input.{} = {};", f.name, f.name))
+            .collect::<Vec<String>>()
+            .join("\n")
+    });
+
+    let in_to_struct = if let Some(vertex_input) = vertex_input {
+        format!(
+            "{} vertex_input;\n{}",
+            vertex_input.name,
+            in_to_struct_assign.unwrap()
+        )
+    } else {
+        String::default()
     };
-
-    let in_to_struct_assign = vertex_input
-        .fields
-        .iter()
-        .map(|f| format!("    vertex_input.{} = {};", f.name, f.name))
-        .collect::<Vec<String>>()
-        .join("\n");
-
-    let in_to_struct = format!(
-        "{} vertex_input;\n{}",
-        vertex_input.name, in_to_struct_assign
-    );
 
     let (instance_to_struct, main_instance_param) = if let Some(instance) =
         vertex_fn.params.get(1).map(|i| match &i.var.t {
@@ -224,6 +251,9 @@ pub fn vertex_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Strin
 // Buffers
 {buffers}
 
+// Constants
+{constants}
+
 // In
 {in_vars}
 
@@ -244,16 +274,40 @@ void main() {{
     {instance_to_struct}
 
     // Out
-    {} {}(vertex_input{});
+    {} {}({}{});
     {}
 }}"#,
-        vertex_out_decl, vertex_fn.var.name, main_instance_param, struct_to_out_assign
+        vertex_out_decl,
+        vertex_fn.var.name,
+        if vertex_input.is_some() {
+            "vertex_input"
+        } else {
+            ""
+        },
+        main_instance_param,
+        struct_to_out_assign
     );
+
+    if WRITE_VERTEX {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}.vert.glsl", meta.name))
+            .unwrap();
+
+        file.write_all(content.as_bytes()).unwrap();
+    }
 
     content
 }
 
-pub fn fragment_shader(ProgramInput { content: info, .. }: &ProgramInput) -> String {
+pub fn fragment_shader(
+    ProgramInput {
+        content: info,
+        meta,
+    }: &ProgramInput,
+) -> String {
     let uniforms = get_uniforms(info);
 
     let structs = get_structs(info);
@@ -261,6 +315,8 @@ pub fn fragment_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Str
     let buffers = get_buffers(info);
 
     let functions = get_functions(info);
+
+    let constants = get_constants(info);
 
     let frag_fn = if let Some(frag_fn) = info.frag_fn.as_ref() {
         frag_fn
@@ -339,6 +395,9 @@ pub fn fragment_shader(ProgramInput { content: info, .. }: &ProgramInput) -> Str
 // Buffers
 {buffers}
 
+// Constants
+{constants}
+
 // In
 {in_vars}
 
@@ -361,27 +420,61 @@ void main() {{
         frag_fn.var.name, fn_param
     );
 
+    if WRITE_VERTEX {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}.frag.glsl", meta.name))
+            .unwrap();
+
+        file.write_all(content.as_bytes()).unwrap();
+    }
+
     content
 }
 
-pub fn no_main(ProgramInput { content, .. }: &ProgramInput) -> String {
+pub fn no_main(ProgramInput { content, meta }: &ProgramInput) -> String {
     let uniforms = get_uniforms(content);
+
+    let buffers = get_buffers(content);
 
     let structs = get_structs(content);
 
     let functions = get_functions(content);
 
-    format!(
+    let constants = get_constants(content);
+
+    let content = format!(
         r#"// Structs
 {structs}
 
 // Uniforms
 {uniforms}
 
+// Buffers
+{buffers}
+
+// Constants
+{constants}
+
 //Functions
 {functions}
     "#
-    )
+    );
+
+    if WRITE_SNIPPET {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(format!("{}.snippet.glsl", meta.name))
+            .unwrap();
+
+        file.write_all(content.as_bytes()).unwrap();
+    }
+
+    content
 }
 
 pub fn compute(info: &ComputeInfo, ProgramInput { content, .. }: &ProgramInput) -> String {
@@ -389,6 +482,7 @@ pub fn compute(info: &ComputeInfo, ProgramInput { content, .. }: &ProgramInput) 
     let uniforms = get_uniforms(content);
     let buffers = get_buffers(content);
     let functions = get_functions(content);
+    let constants = get_constants(content);
 
     let main = info.function.to_string();
     let fn_name = info.name.to_string();
@@ -402,6 +496,9 @@ pub fn compute(info: &ComputeInfo, ProgramInput { content, .. }: &ProgramInput) 
 
 // Buffers
 {buffers}
+
+// Constants
+{constants}
 
 // Functions
 {functions}

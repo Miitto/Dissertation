@@ -18,6 +18,7 @@ glam.workspace = true
 gl.workspace = true
 glutin.workspace = true
 winit.workspace = true
+common.workspace = true
 glutin-winit = "0.5.0"
 raw-window-handle = "0.6.2"
 memoffset = "0.9.1"

@@ -38,6 +38,7 @@ pub trait Buffer: Sized {
     fn set_data<T>(&mut self, data: &[T]) -> Result<bool, BufferError>
     where
         T: Sized;
+    fn set_label(&mut self, label: impl Into<String>);
 }
 
 pub trait RawBuffer: Buffer {

@@ -24,19 +24,13 @@ impl Scene {
 pub enum Test {
     Tri,
     Basic,
-    Instanced,
     Culled,
     Greedy,
-    Raymarch,
-    Flat,
-    Svt64,
 }
 
 impl Test {
     pub fn iter() -> impl Iterator<Item = Self> {
-        [Self::Basic, Self::Instanced, Self::Culled, Self::Greedy]
-            .iter()
-            .copied()
+        [Self::Basic, Self::Culled, Self::Greedy].iter().copied()
     }
 }
 

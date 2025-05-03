@@ -1,5 +1,4 @@
-mod directions;
-pub use directions::*;
+pub use common::directions::*;
 
 #[derive(Clone, Copy, Debug)]
 pub enum DrawMode {

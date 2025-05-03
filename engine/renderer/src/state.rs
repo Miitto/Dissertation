@@ -83,10 +83,10 @@ impl State {
         }
     }
 
-    pub fn avg_fps(&self) -> f64 {
+    pub fn avg_frame_time(&self) -> f64 {
         let sum: f64 = self.frame_deltas.iter().sum();
         let avg = sum / self.frame_deltas.len() as f64;
-        1000. / avg
+        avg
     }
 
     pub fn wipe_fps(&mut self) {

@@ -1,4 +1,7 @@
+pub mod directions;
 pub mod tests;
+
+use directions::Dir;
 
 pub use clap::Parser;
 use tests::{Scene, Test};
@@ -25,9 +28,13 @@ pub struct Args {
     #[arg(short, long, default_value = "false")]
     pub frustum_cull: bool,
 
-    /// Combine Draw calls using SSBO
+    /// Combine Draw calls
     #[arg(short, long, default_value = "false")]
     pub combine: bool,
+
+    /// Use Vertex Pulling
+    #[arg(short, long, default_value = "false")]
+    pub vertex_pull: bool,
 
     /// Profile
     #[arg(short, long, default_value = "false")]
@@ -42,11 +49,12 @@ impl Args {
     pub const fn default() -> Self {
         Self {
             scene: Scene::Single,
-            test: Test::Basic,
+            test: Test::Culled,
             radius: 32,
             depth: 20,
             frustum_cull: false,
-            combine: true,
+            combine: false,
+            vertex_pull: false,
             profile: false,
             auto_test: false,
         }
@@ -61,11 +69,14 @@ impl std::fmt::Display for Args {
             String::new()
         };
         let mut flags = String::new();
-        if self.frustum_cull || self.combine {
+        if self.frustum_cull || self.combine || self.vertex_pull {
             flags.push(' ');
         }
         if self.frustum_cull {
             flags.push('F');
+        }
+        if self.vertex_pull {
+            flags.push('V');
         }
         if self.combine {
             flags.push('C');
@@ -74,8 +85,7 @@ impl std::fmt::Display for Args {
     }
 }
 
-use glam::{IVec3, Vec3, ivec3, vec3};
-use renderer::{Dir, camera::Camera};
+use glam::IVec3;
 
 pub fn seperate_global_pos(pos: &IVec3) -> (IVec3, IVec3) {
     const CHUNK_SIZE: i32 = 30;
@@ -130,6 +140,7 @@ impl Voxel for BasicVoxel {
 #[derive(Clone, Copy, Debug, PartialEq, Default, Hash, Eq)]
 pub enum BlockType {
     #[default]
+    Invalid,
     Air,
     Grass,
     Stone,
@@ -138,13 +149,14 @@ pub enum BlockType {
 
 impl BlockType {
     pub fn is_solid(&self) -> bool {
-        *self != BlockType::Air
+        ![BlockType::Air, BlockType::Invalid].contains(self)
     }
 }
 
 impl From<BlockType> for u32 {
     fn from(value: BlockType) -> u32 {
         match value {
+            BlockType::Invalid => u32::MAX,
             BlockType::Air => 0,
             BlockType::Grass => 1,
             BlockType::Stone => 2,
@@ -162,6 +174,7 @@ impl TryFrom<u32> for BlockType {
             1 => Ok(BlockType::Grass),
             2 => Ok(BlockType::Stone),
             3 => Ok(BlockType::Snow),
+            u32::MAX => Ok(BlockType::Invalid),
             _ => Err(()),
         }
     }
@@ -286,128 +299,4 @@ impl std::fmt::Display for InstanceData {
             self.0
         )
     }
-}
-
-#[allow(unused_variables, unreachable_code)]
-pub fn get_looked_at_block(
-    camera: &dyn Camera,
-    get_block_fn: impl Fn(&IVec3) -> BlockType,
-) -> Option<IVec3> {
-    return None;
-    renderer::profiler::event!("Greedy Get Looked At Block");
-
-    //http://www.cse.yorku.ca/~amana/research/grid.pdf
-    let forward = camera.forward();
-
-    let mut current = camera.transform().position;
-    let end = current + (forward * 6.0);
-
-    let delta = vec3(
-        (end.x - current.x).abs(),
-        (end.y - current.y).abs(),
-        (end.z - current.z).abs(),
-    );
-
-    let step = vec3(forward.x.signum(), forward.y.signum(), forward.z.signum());
-
-    let hypotenuse = delta.length();
-    let hypotenuse_half = hypotenuse / 2.0;
-
-    let mut t_max = vec3(
-        hypotenuse_half / delta.x,
-        hypotenuse_half / delta.y,
-        hypotenuse_half / delta.z,
-    );
-
-    let t_delta = vec3(
-        hypotenuse / delta.x,
-        hypotenuse / delta.y,
-        hypotenuse / delta.z,
-    );
-
-    macro_rules! inc_x {
-        () => {
-            t_max.x += t_delta.x;
-            current.x += step.x;
-        };
-    }
-
-    macro_rules! inc_y {
-        () => {
-            t_max.y += t_delta.y;
-            current.y += step.y;
-        };
-    }
-
-    macro_rules! inc_z {
-        () => {
-            t_max.z += t_delta.z;
-            current.z += step.z;
-        };
-    }
-
-    let compare = |current: &Vec3, end: &Vec3| {
-        let x = if step.x < 0.0 {
-            current.x >= end.x
-        } else {
-            current.x <= end.x
-        };
-
-        let y = if step.y < 0.0 {
-            current.y >= end.y
-        } else {
-            current.y <= end.y
-        };
-
-        let z = if step.z < 0.0 {
-            current.z >= end.z
-        } else {
-            current.z <= end.z
-        };
-
-        x && y && z
-    };
-
-    while compare(&current, &end) {
-        if t_max.x < t_max.y {
-            if t_max.x < t_max.z {
-                inc_x!();
-            } else if t_max.x > t_max.z {
-                inc_z!();
-            } else {
-                inc_x!();
-                inc_z!();
-            }
-        } else if t_max.x > t_max.y {
-            if t_max.y < t_max.z {
-                inc_y!();
-            } else if t_max.y > t_max.z {
-                inc_z!();
-            } else {
-                inc_y!();
-                inc_z!();
-            }
-        } else if t_max.y < t_max.z {
-            inc_x!();
-            inc_y!();
-        } else if t_max.y > t_max.z {
-            inc_z!();
-        } else {
-            inc_x!();
-            inc_y!();
-            inc_z!();
-        }
-
-        let pos = ivec3(
-            current.x.floor() as i32,
-            current.y.floor() as i32,
-            current.z.floor() as i32,
-        );
-
-        if get_block_fn(&pos).is_solid() {
-            return Some(pos);
-        }
-    }
-
-    None
 }

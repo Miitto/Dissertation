@@ -6,6 +6,7 @@ use crate::{
 };
 
 mod buffer;
+mod constant;
 mod function;
 mod preprocessor;
 mod r#struct;
@@ -13,6 +14,7 @@ mod uniform;
 mod variable;
 
 use buffer::parse_buffer;
+use constant::parse_constant;
 use function::parse_function;
 use preprocessor::parse_preprocessor;
 use r#struct::parse_struct;
@@ -87,6 +89,18 @@ fn parse_segments(
             Err(e) => {
                 if let Some(e) = e {
                     return Err(e);
+                }
+            }
+        }
+        match parse_constant(input, info) {
+            Ok((rest, constant)) => {
+                input = rest;
+                info.constants.push(constant);
+                continue;
+            }
+            Err(diag) => {
+                if let Some(diag) = diag {
+                    return Err(diag);
                 }
             }
         }

@@ -384,7 +384,6 @@ dependencies = [
  "dashmap",
  "glam",
  "rayon",
- "renderer",
 ]
 
 [[package]]
@@ -565,7 +564,6 @@ dependencies = [
  "gl",
  "glam",
  "meshing",
- "raytracing",
  "renderer",
  "shaders",
  "winit",
@@ -1441,18 +1439,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "raytracing"
-version = "0.1.0"
-dependencies = [
- "common",
- "dashmap",
- "gl",
- "glam",
- "renderer",
- "winit",
-]
-
-[[package]]
 name = "redox_syscall"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1512,6 +1498,7 @@ dependencies = [
 name = "renderer"
 version = "0.1.0"
 dependencies = [
+ "common",
  "criterion",
  "gl",
  "glam",

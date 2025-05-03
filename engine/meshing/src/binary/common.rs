@@ -31,16 +31,23 @@ pub struct GreedyFace {
 }
 
 pub static BLANK_VOXELS: [[[BasicVoxel; CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE] =
-    [[[BasicVoxel::new(BlockType::Air); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+    [[[BasicVoxel::new(BlockType::Invalid); CHUNK_SIZE]; CHUNK_SIZE]; CHUNK_SIZE];
+
+pub struct VoxelRef<'a> {
+    pub voxels: &'a VoxelArray,
+    pub position: IVec3,
+}
+
+pub struct VoxelArrayRef<'a> {
+    pub x: VoxelRef<'a>,
+    pub y: VoxelRef<'a>,
+    pub z: VoxelRef<'a>,
+}
 
 pub struct ChunkRefs<'a> {
-    pub chunk: &'a VoxelArray,
-    pub x_pos: &'a VoxelArray,
-    pub y_pos: &'a VoxelArray,
-    pub z_pos: &'a VoxelArray,
-    pub x_neg: &'a VoxelArray,
-    pub y_neg: &'a VoxelArray,
-    pub z_neg: &'a VoxelArray,
+    pub chunk: VoxelRef<'a>,
+    pub pos: VoxelArrayRef<'a>,
+    pub neg: VoxelArrayRef<'a>,
 }
 
 pub fn make_faces(
@@ -100,14 +107,57 @@ pub fn make_faces(
         &IVec3::new(position.x, position.y, position.z + 1)
     );
 
+    let x_pos = VoxelRef {
+        voxels: blocks_x_pos,
+        position: IVec3::new(position.x + 1, position.y, position.z),
+    };
+
+    let y_pos = VoxelRef {
+        voxels: blocks_y_pos,
+        position: IVec3::new(position.x, position.y + 1, position.z),
+    };
+
+    let z_pos = VoxelRef {
+        voxels: blocks_z_pos,
+        position: IVec3::new(position.x, position.y, position.z + 1),
+    };
+
+    let pos = VoxelArrayRef {
+        x: x_pos,
+        y: y_pos,
+        z: z_pos,
+    };
+
+    let x_neg = VoxelRef {
+        voxels: blocks_x_neg,
+        position: IVec3::new(position.x - 1, position.y, position.z),
+    };
+
+    let y_neg = VoxelRef {
+        voxels: blocks_y_neg,
+        position: IVec3::new(position.x, position.y - 1, position.z),
+    };
+
+    let z_neg = VoxelRef {
+        voxels: blocks_z_neg,
+        position: IVec3::new(position.x, position.y, position.z - 1),
+    };
+
+    let neg = VoxelArrayRef {
+        x: x_neg,
+        y: y_neg,
+        z: z_neg,
+    };
+
+    let chunks_center = VoxelRef {
+        voxels: blocks_center,
+        position: *position,
+    };
+
     let refs = ChunkRefs {
-        chunk: blocks_center,
-        x_pos: blocks_x_pos,
-        y_pos: blocks_y_pos,
-        z_pos: blocks_z_pos,
-        x_neg: blocks_x_neg,
-        y_neg: blocks_y_neg,
-        z_neg: blocks_z_neg,
+        chunk: chunks_center,
+        pos,
+        neg,
     };
 
     if greedy {
@@ -151,61 +201,73 @@ pub fn build_depths(chunks: &ChunkRefs) -> Box<AxisDepths> {
         }
     }
 
+    #[inline]
+    fn get_block(blocks: &VoxelRef, position: &IVec3, x: usize, y: usize, z: usize) -> bool {
+        let block_x = blocks.position.x.signum() >= 0;
+        let position_x = position.x.signum() >= 0;
+        let block_y = blocks.position.y.signum() >= 0;
+        let position_y = position.y.signum() >= 0;
+        let block_z = blocks.position.z.signum() >= 0;
+        let position_z = position.z.signum() >= 0;
+
+        let x = if block_x != position_x {
+            CHUNK_SIZE - x - 1
+        } else {
+            x
+        };
+
+        let y = if block_y != position_y {
+            CHUNK_SIZE - y - 1
+        } else {
+            y
+        };
+
+        let z = if block_z != position_z {
+            CHUNK_SIZE - z - 1
+        } else {
+            z
+        };
+
+        blocks.voxels[x][y][z].get_type().is_solid()
+    }
+
     for z in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
             for x in 0..CHUNK_SIZE {
-                let v = chunks.chunk[x][y][z];
+                let v = chunks.chunk.voxels[x][y][z].get_type().is_solid();
                 // Add One to compensate for padding
-                add_voxel(v.get_type().is_solid(), x + 1, y + 1, z + 1, &mut depths);
+                add_voxel(v, x + 1, y + 1, z + 1, &mut depths);
             }
         }
     }
 
     for z in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
-            let min = chunks.x_pos[0][y][z];
-            let max = chunks.x_neg[CHUNK_SIZE - 1][y][z];
+            let min = get_block(&chunks.pos.x, &chunks.chunk.position, 0, y, z);
+            let max = get_block(&chunks.neg.x, &chunks.chunk.position, CHUNK_SIZE - 1, y, z);
 
-            add_voxel(min.get_type().is_solid(), 0, y + 1, z + 1, &mut depths);
-            add_voxel(
-                max.get_type().is_solid(),
-                CHUNK_SIZE + 1,
-                y + 1,
-                z + 1,
-                &mut depths,
-            );
+            add_voxel(max, 0, y + 1, z + 1, &mut depths);
+            add_voxel(min, CHUNK_SIZE + 1, y + 1, z + 1, &mut depths);
         }
     }
 
     for x in 0..CHUNK_SIZE {
         for y in 0..CHUNK_SIZE {
-            let min = chunks.z_pos[x][y][0];
-            let max = chunks.z_neg[x][y][CHUNK_SIZE - 1];
+            let min = get_block(&chunks.pos.z, &chunks.chunk.position, x, y, 0);
+            let max = get_block(&chunks.neg.z, &chunks.chunk.position, x, y, CHUNK_SIZE - 1);
 
-            add_voxel(min.get_type().is_solid(), x + 1, y + 1, 0, &mut depths);
-            add_voxel(
-                max.get_type().is_solid(),
-                x + 1,
-                y + 1,
-                CHUNK_SIZE + 1,
-                &mut depths,
-            );
+            add_voxel(max, x + 1, y + 1, 0, &mut depths);
+            add_voxel(min, x + 1, y + 1, CHUNK_SIZE + 1, &mut depths);
         }
     }
 
     for z in 0..CHUNK_SIZE {
         for x in 0..CHUNK_SIZE {
-            let min = chunks.y_pos[x][0][z];
-            let max = chunks.y_neg[x][CHUNK_SIZE - 1][z];
+            let min = get_block(&chunks.pos.y, &chunks.chunk.position, x, 0, z);
+            let max = get_block(&chunks.neg.y, &chunks.chunk.position, x, CHUNK_SIZE - 1, z);
 
-            add_voxel(min.get_type().is_solid(), x + 1, 0, z + 1, &mut depths);
-            add_voxel(
-                max.get_type().is_solid(),
-                x + 1,
-                CHUNK_SIZE + 1,
-                z + 1,
-                &mut depths,
-            );
+            add_voxel(max, x + 1, 0, z + 1, &mut depths);
+            add_voxel(min, x + 1, CHUNK_SIZE + 1, z + 1, &mut depths);
         }
     }
 
@@ -269,9 +331,9 @@ pub fn depths_to_faces(depths: FaceDepths, chunks: &ChunkRefs) -> TransformedBlo
                     col &= col - 1;
 
                     let voxel = match dir {
-                        Dir::Up | Dir::Down => chunks.chunk[x][y][z],
-                        Dir::Left | Dir::Right => chunks.chunk[y][z][x],
-                        Dir::Forward | Dir::Backward => chunks.chunk[x][z][y],
+                        Dir::Up | Dir::Down => chunks.chunk.voxels[x][y][z],
+                        Dir::Left | Dir::Right => chunks.chunk.voxels[y][z][x],
+                        Dir::Forward | Dir::Backward => chunks.chunk.voxels[x][z][y],
                     };
 
                     let block_type = voxel.get_type();

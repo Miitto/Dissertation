@@ -9,32 +9,33 @@ pub fn vertex_struct(input: &ProgramInput, use_crate: bool) -> proc_macro2::Toke
     let ProgramInput { content: info, .. } = input;
 
     let (fields, bind_count, binds) = if let Some(vertex_fn) = &info.vertex_fn {
-        let in_param = vertex_fn
-            .params
-            .first()
-            .expect("Vertex function must have one parameter");
+        if vertex_fn.params.is_empty() {
+            (vec![], 0, quote! {})
+        } else {
+            let in_param = vertex_fn.params.first().unwrap();
 
-        let vertex_input = match &in_param.var.t {
-            ShaderType::Struct(s) => s,
-            _ => panic!("Vertex function must take structs as input"),
-        };
+            let vertex_input = match &in_param.var.t {
+                ShaderType::Struct(s) => s,
+                _ => panic!("Vertex function must take structs as input"),
+            };
 
-        let fields = vertex_input
-            .fields
-            .iter()
-            .map(|f| {
-                let name = format_ident!("{}", f.name.to_string());
-                let ty = &f.t;
-                quote! {
-                    #name: #ty
-                }
-            })
-            .collect();
+            let fields = vertex_input
+                .fields
+                .iter()
+                .map(|f| {
+                    let name = format_ident!("{}", f.name.to_string());
+                    let ty = &f.t;
+                    quote! {
+                        #name: #ty
+                    }
+                })
+                .collect();
 
-        let (bind_count, binds) =
-            vertex_binds(format_ident!("Vertex"), &vertex_input.fields, 0, use_crate);
+            let (bind_count, binds) =
+                vertex_binds(format_ident!("Vertex"), &vertex_input.fields, 0, use_crate);
 
-        (fields, bind_count, binds)
+            (fields, bind_count, binds)
+        }
     } else {
         (vec![], 0, quote! {})
     };

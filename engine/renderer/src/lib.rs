@@ -1,5 +1,6 @@
 #![feature(duration_millis_float)]
 
+use common::Args;
 use glutin::{
     config::ConfigTemplateBuilder, context::Version, display::GetGlDisplay, surface::GlSurface,
 };
@@ -182,8 +183,7 @@ pub fn make_window(event_loop: &ActiveEventLoop) -> Display {
 
 pub trait Renderable {
     fn render(&mut self, state: &mut State);
-    fn cull(&mut self, cull: bool);
-    fn combine(&mut self, combine: bool);
+    fn args(&mut self, args: &Args);
 }
 
 extern "system" fn gl_error_callback(

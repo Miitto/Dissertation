@@ -83,9 +83,9 @@ impl Renderable for Voxel {
         state.draw(&mut *self.mesh.borrow_mut(), &program, &uniforms);
     }
 
-    fn cull(&mut self, _cull: bool) {}
-
-    fn combine(&mut self, _combine: bool) {}
+    fn args(&mut self, _args: &common::Args) {
+        todo!()
+    }
 }
 
 renderer::program!(basic_voxel, {
@@ -154,6 +154,69 @@ renderer::program!(instanced_voxel, {
         o.color = get_block_color(ii.block_type);
 
         vec3 pos = i.position + ii.pos;
+
+        gl_Position = pv * vec4(pos, 1.0);
+        return o;
+    }
+
+    vec4 frag(v2f i) {
+        return i.color;
+    }
+});
+
+renderer::program!(vertex_pull, {
+    #vertex vertex
+    #fragment frag
+
+    #snippet renderer::camera_matrices
+
+    #include "shaders/block.glsl"
+
+    const ivec3 vertices[8] = ivec3[](
+        ivec3(0, 0, 0),
+        ivec3(0, 1, 0),
+        ivec3(1, 1, 0),
+        ivec3(1, 0, 0),
+        ivec3(0, 0, 1),
+        ivec3(0, 1, 1),
+        ivec3(1, 1, 1),
+        ivec3(1, 0, 1)
+    );
+
+    const int indices[36] = int[](
+        0, 1, 2, 2, 3, 0, // Front
+        7, 6, 5, 5, 4, 7, // Back
+        4, 5, 1, 1, 0, 4, // Left
+        3, 2, 6, 6, 7, 3, // Right
+        1, 5, 6, 6, 2, 1, // Top
+        4, 0, 3, 3, 7, 4 // Bottom
+    );
+
+    #bind 1
+    buffer BlockPosition {
+        ivec4 block_data[];
+    };
+
+    struct v2f {
+        vec4 color;
+    }
+
+    v2f vertex() {
+        v2f o;
+        mat4 pv = camera.projection * camera.inverse_view;
+
+        int index = gl_VertexID % 36;
+        int offset = indices[index];
+
+        ivec3 vertex = vertices[offset];
+
+        int block = gl_VertexID / 36;
+        ivec3 block_position = block_data[block].xyz;
+        uint block_type = uint(block_data[block].w);
+
+        o.color = get_block_color(block_type);
+
+        ivec3 pos = vertex + block_position;
 
         gl_Position = pv * vec4(pos, 1.0);
         return o;

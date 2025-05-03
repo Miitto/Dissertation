@@ -107,6 +107,10 @@ where
 
         Ok(offset)
     }
+
+    pub fn set_label(&mut self, label: &str) {
+        self.buffer.set_label(label);
+    }
 }
 
 impl<T> ShaderBuffer<T>

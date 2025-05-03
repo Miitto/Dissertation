@@ -11,6 +11,7 @@ pub struct ShaderVar {
     pub t: ShaderType,
     pub type_span: Option<Span>,
     pub is_array: bool,
+    pub array_count: Option<u32>,
 }
 
 impl Display for ShaderVar {
@@ -20,7 +21,15 @@ impl Display for ShaderVar {
             "{} {}{}",
             self.t,
             self.name,
-            if self.is_array { "[]" } else { "" }
+            if self.is_array {
+                format!(
+                    "[{}]",
+                    self.array_count
+                        .map_or(String::default(), |c| c.to_string())
+                )
+            } else {
+                String::new()
+            }
         )
     }
 }
@@ -30,6 +39,18 @@ impl ToTokens for ShaderVar {
         let name: proc_macro2::Ident = format_ident!("{}", self.name.to_string());
         let t = &self.t;
         tokens.extend(quote! {#t #name});
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct ShaderConstant {
+    pub var: ShaderVar,
+    pub value: String,
+}
+
+impl Display for ShaderConstant {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "const {} = {};", self.var, self.value)
     }
 }
 

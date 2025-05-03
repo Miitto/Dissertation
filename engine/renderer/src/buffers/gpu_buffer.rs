@@ -38,11 +38,15 @@ pub struct GpuBuffer {
     size: usize,
     mapping: Option<MappingAddr>,
     mode: BufferMode,
+    label: Option<String>,
 }
 
 impl GpuBuffer {
     pub fn reallocate_with_size(&mut self, size: usize) -> Result<(), BufferError> {
-        println!("Reallocating GpuBuffer");
+        println!(
+            "Reallocating GpuBuffer: {}",
+            self.label.clone().unwrap_or_default()
+        );
         let old_size = self.size;
         let old_id = self.id;
 
@@ -137,6 +141,7 @@ impl Buffer for GpuBuffer {
             count: 0,
             mapping: None,
             mode,
+            label: None,
         };
 
         buf.create_with(std::ptr::null())?;
@@ -157,6 +162,7 @@ impl Buffer for GpuBuffer {
             count: data.len(),
             mapping: None,
             mode,
+            label: None,
         };
 
         buf.create_with(data.as_ptr() as *const std::os::raw::c_void)?;
@@ -169,6 +175,10 @@ impl Buffer for GpuBuffer {
         T: Sized,
     {
         self.set_offset_data(0, data)
+    }
+
+    fn set_label(&mut self, label: impl Into<String>) {
+        self.label = Some(label.into());
     }
 }
 
@@ -205,7 +215,8 @@ impl RawBuffer for GpuBuffer {
         let size = std::mem::size_of_val(data);
         if size + offset > self.size() {
             panic!(
-                "Attempted to write outside of buffer bounds | Size: {}, Offset: {}, Buffer Size: {}",
+                "Attempted to write outside of buffer bounds: {} | Size: {}, Offset: {}, Buffer Size: {}",
+                self.label.clone().unwrap_or_default(),
                 size,
                 offset,
                 self.size()
@@ -299,7 +310,8 @@ impl RawBuffer for GpuBuffer {
             )
         } else {
             panic!(
-                "Buffer has no mapping: Buffer Type: {:?} | Size: {}",
+                "Buffer has no mapping: {} | Buffer Type: {:?} | Size: {}",
+                self.label.clone().unwrap_or_default(),
                 self.buf_mode(),
                 self.size()
             );
