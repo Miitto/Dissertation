@@ -44,9 +44,9 @@ pub fn test_scene(args: &Args) -> DashMap<IVec3, BlockType> {
         }
         Scene::Cube => {
             let map = DashMap::new();
-            (0..32).for_each(|x| {
-                (0..32).for_each(|y| {
-                    (32..64).for_each(|z| {
+            (0..30).for_each(|x| {
+                (0..30).for_each(|y| {
+                    (30..60).for_each(|z| {
                         map.insert(ivec3(x, y, z), BlockType::Grass);
                     })
                 })

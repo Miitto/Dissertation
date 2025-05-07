@@ -42,7 +42,7 @@ macro_rules! make_test {
 }
 
 const TIME_PER_TEST: f64 = 5.0;
-const TESTS: [Args; 148] = [
+const TESTS: [Args; 132] = [
     make_test!(Single, Basic, false, false),
     make_test!(Single, Basic, false, true),
     make_test!(Single, Basic, false, false, true),
@@ -175,22 +175,6 @@ const TESTS: [Args; 148] = [
     make_test!(Perlin, Greedy, true, false, true, 512),
     make_test!(Perlin, Greedy, false, true, true, 512),
     make_test!(Perlin, Greedy, true, true, true, 512),
-    make_test!(Perlin, Culled, false, false, false, 1024),
-    make_test!(Perlin, Culled, true, false, false, 1024),
-    make_test!(Perlin, Culled, false, true, false, 1024),
-    make_test!(Perlin, Culled, true, true, false, 1024),
-    make_test!(Perlin, Culled, false, false, true, 1024),
-    make_test!(Perlin, Culled, true, false, true, 1024),
-    make_test!(Perlin, Culled, false, true, true, 1024),
-    make_test!(Perlin, Culled, true, true, true, 1024),
-    make_test!(Perlin, Greedy, false, false, false, 1024),
-    make_test!(Perlin, Greedy, true, false, false, 1024),
-    make_test!(Perlin, Greedy, false, true, false, 1024),
-    make_test!(Perlin, Greedy, true, true, false, 1024),
-    make_test!(Perlin, Greedy, false, false, true, 1024),
-    make_test!(Perlin, Greedy, true, false, true, 1024),
-    make_test!(Perlin, Greedy, false, true, true, 1024),
-    make_test!(Perlin, Greedy, true, true, true, 1024),
 ];
 
 fn setup_test(app: &mut App) {
@@ -255,15 +239,12 @@ fn main() {
             None
         };
         let _ = event_loop.run_app(&mut app);
-        println!("Average FPS: {}", app.state().avg_fps());
+        let time = app.state().avg_frame_time();
+        println!("Average Time: {} ({} FPS)", time, 1000. / time);
     }
 
     println!();
     println!("Compiled {} shaders", shaders::shaders_compiled());
-
-    for (i, fps) in app.test_fps.iter().enumerate() {
-        println!("Test {:?}: Average FPS: {}", TESTS[i], fps);
-    }
 }
 
 struct App {
@@ -368,7 +349,12 @@ impl ApplicationHandler for App {
                         if self.test_step != 0 {
                             let avg_time = self.state().avg_frame_time();
                             self.test_fps.push(avg_time);
-                            println!("Average Time for {}: {}", self.args, avg_time);
+                            println!(
+                                "Average Time for {}: {} ({} FPS)",
+                                self.args,
+                                avg_time,
+                                1000. / avg_time
+                            );
 
                             let mut file = OpenOptions::new()
                                 .append(true)

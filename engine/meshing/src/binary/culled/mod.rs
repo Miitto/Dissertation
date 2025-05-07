@@ -257,26 +257,28 @@ impl Renderable for ChunkManager {
 
         self.combine = args.combine;
 
-        match self.combined.render_data {
-            RenderData::Instance(ref mut mesh) => {
-                if args.vertex_pull {
-                    self.combined.render_data = RenderData::VertexPull(BlankVao::new(), None);
-                    setup_chunks(self);
+        if self.combine {
+            match self.combined.render_data {
+                RenderData::Instance(_) => {
+                    if args.vertex_pull {
+                        self.combined.render_data = RenderData::VertexPull(BlankVao::new(), None);
+                        setup_chunks(self);
+                    }
                 }
-            }
-            RenderData::VertexPull(_, _) => {
-                if !args.vertex_pull {
-                    let vertices = vec![
-                        culled_voxel_combined::Vertex::new([0, 0, 0]),
-                        culled_voxel_combined::Vertex::new([1, 0, 0]),
-                        culled_voxel_combined::Vertex::new([0, 0, 1]),
-                        culled_voxel_combined::Vertex::new([1, 0, 1]),
-                    ];
-                    self.combined.render_data = RenderData::Instance(
-                        NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
-                            .expect("Failed to create greedy ChunkManager mesh"),
-                    );
-                    setup_chunks(self);
+                RenderData::VertexPull(_, _) => {
+                    if !args.vertex_pull {
+                        let vertices = vec![
+                            culled_voxel_combined::Vertex::new([0, 0, 0]),
+                            culled_voxel_combined::Vertex::new([1, 0, 0]),
+                            culled_voxel_combined::Vertex::new([0, 0, 1]),
+                            culled_voxel_combined::Vertex::new([1, 0, 1]),
+                        ];
+                        self.combined.render_data = RenderData::Instance(
+                            NInstancedMesh::with_vertices(&vertices, None, DrawMode::TriangleStrip)
+                                .expect("Failed to create greedy ChunkManager mesh"),
+                        );
+                        setup_chunks(self);
+                    }
                 }
             }
         }
